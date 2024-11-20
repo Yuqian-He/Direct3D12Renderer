@@ -23,3 +23,17 @@ Develop a real-time global illumination rendering engine capable of computing in
     - COM Programming: [Microsoft WRL (Windows Runtime C++ Template Library)](https://learn.microsoft.com/en-us/cpp/cppcx/wrl/using-the-windows-runtime-cpp-template-library-wrl?view=msvc-170) 
 - Version Control
     - Version Control System: Git
+<<<<<<< HEAD
+=======
+
+## **Project Roadmap**
+
+| **Phase**              | **Objective**                                                                                     | **Tasks**                                                                                                                                                                                                                                                        | **Timeframe**    |
+|-------------------------|---------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------|
+| **Phase 1:** Project Foundation and Setup  | Set up the development environment and build a basic understanding of Direct3D 12.        | 1. Prepare development environment: Install **Visual Studio 2022** and the latest **Windows SDK**.<br>2. Understand Direct3D 12 rendering pipeline: Root Signature, Command List, Descriptor Heap.<br>3. Initialize a project to render a simple triangle.      | 1–2 weeks       |
+| **Phase 2:** Basic Rendering Engine        | Implement the rendering pipeline and basic dynamic lighting with shadow mapping.          | 1. Implement Root Signature and PSO.<br>2. Load simple models and add camera movement.<br>3. Implement dynamic lighting and shadow mapping using depth buffers.                                                                                              | 2–3 weeks       |
+| **Phase 3:** Screen-Space Effects          | Add screen-space global illumination (SSGI) and reflections (SSR) for post-processing.    | 1. Implement SSGI using G-buffer data to simulate indirect lighting.<br>2. Add SSR using depth buffer-based ray tracing.<br>3. Optimize post-processing using dynamic resolution and asynchronous computation.                                                  | 3–4 weeks       |
+| **Phase 4:** Multithreading and Culling    | Optimize rendering performance with multithreading and geometry culling techniques.        | 1. Use Direct3D 12's command lists for parallel rendering.<br>2. Implement frustum culling with multithreaded computations.<br>3. Optimize memory usage and resource transfers.                                                                                  | 2–3 weeks       |
+| **Phase 5:** Advanced Features            | Enhance visual quality with PBR materials and volumetric lighting.                        | 1. Implement PBR materials with metalness and roughness support.<br>2. Add volumetric lighting for atmospheric effects.<br>3. Optimize frame rates and create a demo showcasing the project's features.                                                        | 3–4 weeks       |
+
+>>>>>>> 78dd9f2 (finish the first step of this whole project)
