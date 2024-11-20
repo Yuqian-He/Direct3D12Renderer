@@ -1,6 +1,2 @@
 # 忽略 build 目录
 build/
-<<<<<<< HEAD
-=======
-.vs/
->>>>>>> 78dd9f2 (finish the first step of this whole project)

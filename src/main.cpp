@@ -1,12 +1,4 @@
 #include <windows.h>
-<<<<<<< HEAD
-#include <d3d12.h>
-#include <dxgi1_6.h>
-#include <wrl.h>
-
-using namespace Microsoft::WRL;
-
-=======
 #include <iostream>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -17,7 +9,6 @@ using namespace Microsoft::WRL;
 using namespace Microsoft::WRL;
 
 // 窗口过程函数
->>>>>>> 78dd9f2 (finish the first step of this whole project)
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (uMsg == WM_DESTROY) {
         PostQuitMessage(0);
@@ -26,10 +17,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-<<<<<<< HEAD
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
-    // 创建窗口
-=======
 // 入口点函数
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
     // 创建控制台窗口
@@ -40,7 +27,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     // 注册窗口类
->>>>>>> 78dd9f2 (finish the first step of this whole project)
     WNDCLASS wc = {};
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
@@ -48,10 +34,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     RegisterClass(&wc);
 
-<<<<<<< HEAD
-=======
     // 创建窗口
->>>>>>> 78dd9f2 (finish the first step of this whole project)
     HWND hwnd = CreateWindowExW(  // 使用宽字符版本
         0, L"D3D12Renderer", L"Direct3D 12 Renderer",
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1280, 720,
@@ -59,8 +42,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     ShowWindow(hwnd, nShowCmd);
 
-<<<<<<< HEAD
-=======
     // 创建渲染器实例并初始化
     Renderer renderer;
     try {
@@ -73,7 +54,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return -1;
     }
 
->>>>>>> 78dd9f2 (finish the first step of this whole project)
     // 主消息循环
     MSG msg = {};
     while (msg.message != WM_QUIT) {
@@ -81,12 +61,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-<<<<<<< HEAD
-=======
 
         // 每一帧渲染
         renderer.Render();
->>>>>>> 78dd9f2 (finish the first step of this whole project)
     }
 
     return 0;

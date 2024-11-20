@@ -3,14 +3,6 @@ project(Direct3D12Renderer)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
-<<<<<<< HEAD
-
-# 添加包含目录
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
-# 查找 src 文件夹中的所有 .cpp 文件
-file(GLOB SOURCES ${CMAKE_SOURCE_DIR}/src/*.cpp)
-=======
 set(CMAKE_SYSTEM_VERSION "10.0.22621.0")
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -21,19 +13,12 @@ include_directories("C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0
 file(GLOB SOURCES ${CMAKE_SOURCE_DIR}/src/*.cpp)
 file(GLOB SHADERS ${CMAKE_SOURCE_DIR}/shaders/*.hlsl)
 file(GLOB SHADERS ${CMAKE_SOURCE_DIR}/include/*.h)
->>>>>>> 78dd9f2 (finish the first step of this whole project)
 
 # 添加可执行文件
 add_definitions(-DUNICODE -D_UNICODE)
 add_executable(Direct3D12Renderer WIN32 src/main.cpp src/Renderer.cpp)
 
-<<<<<<< HEAD
-# 链接 Direct3D12 和 DXGI 库
-target_link_libraries(Direct3D12Renderer d3d12 dxgi)
-
-=======
 link_directories("C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64")
 
 # 链接 Direct3D12 和 DXGI 库
 target_link_libraries(Direct3D12Renderer d3d12 dxgi d3dcompiler)
->>>>>>> 78dd9f2 (finish the first step of this whole project)
