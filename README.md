@@ -32,48 +32,59 @@ Develop a real-time global illumination rendering engine capable of computing in
 - [x] Install **Visual Studio 2022** and **Windows SDK**.  
 - [x] Learn Direct3D 12 pipeline: Root Signature, Command List, Descriptor Heap.  
 - [x] Initialize project: Render a simple triangle.  
+
 **Result:**
 [Direct3D 12 Triangle Rendering](https://github.com/Yuqian-He/Direct3DTriangleRenderer)
+
 **Timeframe:** 2024-11-15 to 2024-11-29  
 
 ---
 
 ### **Phase 2: Basic Rendering Engine**
 **Objective:** Implement the rendering pipeline and basic lighting with shadows.  
+
 **Tasks:**
 - [ ] Implement Root Signature and PSO.  
 - [ ] Add camera movement and load simple models.  
 - [ ] Implement dynamic lighting and shadow mapping.  
+
 **Timeframe:** 2024-11-30 to 2024-12-14  
 
 ---
 
 ### **Phase 3: Screen-Space Effects**
 **Objective:** Add screen-space global illumination (SSGI) and reflections (SSR).  
+
 **Tasks:**
 - [ ] Implement SSGI for indirect lighting.  
 - [ ] Add SSR using depth buffer ray tracing.  
 - [ ] Optimize post-processing performance.  
+
 **Timeframe:** 2024-12-15 to 2024-12-29  
 
 ---
 
 ### **Phase 4: Multithreading and Culling**
 **Objective:** Optimize rendering performance with multithreading and culling.  
+
 **Tasks:**
 - [ ] Use command lists for parallel rendering.  
 - [ ] Implement frustum culling.  
 - [ ] Optimize memory usage and resource management.  
+
+
 **Timeframe:** 2024-12-30 to 2024-01-13  
 
 ---
 
 ### **Phase 5: Advanced Features**
 **Objective:** Enhance visual quality with PBR materials and volumetric lighting.  
+
 **Tasks:**
 - [ ] Add PBR materials with metalness and roughness.  
 - [ ] Implement volumetric lighting for atmospheric effects.  
 - [ ] Create a demo showcasing all features.  
+
 **Timeframe:** 2024-01-14 to 2024-01-28  
 
 
