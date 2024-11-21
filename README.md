@@ -29,9 +29,9 @@ Develop a real-time global illumination rendering engine capable of computing in
 ### **Phase 1: Project Foundation and Setup**
 **Objective:** Set up the development environment and understand Direct3D 12 basics.  
 **Tasks:**
-- [x] Install **Visual Studio 2022** and **Windows SDK**.  
-- [x] Learn Direct3D 12 pipeline: Root Signature, Command List, Descriptor Heap.  
-- [x] Initialize project: Render a simple triangle.  
+- ✅ Install **Visual Studio 2022** and **Windows SDK**.
+- ✅ Learn Direct3D 12 pipeline: Root Signature, Command List, Descriptor Heap.  
+- ✅ Initialize project: Render a simple triangle.  
 
 **Result:**
 [Direct3D 12 Triangle Rendering](https://github.com/Yuqian-He/Direct3DTriangleRenderer)
