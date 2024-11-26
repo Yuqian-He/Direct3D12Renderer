@@ -17,15 +17,15 @@ Develop a real-time global illumination rendering engine capable of computing in
     - Build System: [MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild?view=vs-2022)
     - Compiler: [MSVC (Microsoft Visual C++)](https://learn.microsoft.com/en-us/cpp/?view=msvc-170)
     - Integrated Development Environment (IDE): [Visual Studio 2022](https://visualstudio.microsoft.com/)
-- Libraries and Tools
+- Libraries
     - Graphics and Rendering: [DirectX 12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/directx-12-programming-environment) 
     - Windows Platform Interface: [Windows API](https://learn.microsoft.com/en-us/windows/win32/api/) 
     - COM Programming: [Microsoft WRL (Windows Runtime C++ Template Library)](https://learn.microsoft.com/en-us/cpp/cppcx/wrl/using-the-windows-runtime-cpp-template-library-wrl?view=msvc-170) 
     - Model Loading: [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader)
-- Package Manager
-    - [vcpkg](https://github.com/microsoft/vcpkg)
-- Version Control
-    - Version Control System: Git
+- Development and Debugging Tools
+    - Package Manager: [vcpkg](https://github.com/microsoft/vcpkg)
+    - Version Control: [Git](https://github.com/)
+    - Debugging: [PIX](https://devblogs.microsoft.com/pix/)
 
 ## **Project Roadmap**
 
