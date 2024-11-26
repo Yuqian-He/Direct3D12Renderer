@@ -5,6 +5,7 @@
 #include <wrl.h>
 #include "Renderer.h"
 #include <stdexcept>
+#include <vector>
 
 using namespace Microsoft::WRL;
 

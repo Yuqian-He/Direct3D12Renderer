@@ -21,6 +21,9 @@ Develop a real-time global illumination rendering engine capable of computing in
     - Graphics and Rendering: [DirectX 12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/directx-12-programming-environment) 
     - Windows Platform Interface: [Windows API](https://learn.microsoft.com/en-us/windows/win32/api/) 
     - COM Programming: [Microsoft WRL (Windows Runtime C++ Template Library)](https://learn.microsoft.com/en-us/cpp/cppcx/wrl/using-the-windows-runtime-cpp-template-library-wrl?view=msvc-170) 
+    - Model Loading: [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader)
+- Package Manager
+    - [vcpkg](https://github.com/microsoft/vcpkg)
 - Version Control
     - Version Control System: Git
 
@@ -44,8 +47,9 @@ Develop a real-time global illumination rendering engine capable of computing in
 **Objective:** Implement the rendering pipeline and basic lighting with shadows.  
 
 **Tasks:**
-- [ ] Implement Root Signature and PSO.  
-- [ ] Add camera movement and load simple models.  
+- ✅ Implement Root Signature and PSO.  
+- [ ] Add camera movement.
+- [ ] Load simple models.  
 - [ ] Implement dynamic lighting and shadow mapping.  
 
 **Timeframe:** 2024-11-30 to 2024-12-14  

@@ -1,5 +1,7 @@
 #pragma once
 #include <d3d12.h>
+#include <vector>
+#include "Vertex.h"
 #include <wrl.h>
 #include <DirectXMath.h>
 #include <stdexcept>
@@ -15,6 +17,12 @@
 
 class Renderer {
 public:
+
+    std::vector<Vertex> m_vertices;  // 或其他类型
+    std::vector<UINT> m_indices;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
+
     void Initialize(HWND hwnd);
     void Render();
 
@@ -23,7 +31,7 @@ public:
     void CreateDescriptorHeaps();
     void CreateRootSignature();
     void CreatePipelineState();
-    void CreateVertexBuffer();
+    void CreateVertexBuffer(const std::vector<Vertex>& vertices, const std::vector<UINT>& indices);
     void CreateCommandList();
     void ExecuteCommandList();
     void WaitForGpu();
@@ -47,7 +55,6 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapChain;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
     Microsoft::WRL::ComPtr<ID3DBlob> m_vertexShader;

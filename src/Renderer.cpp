@@ -1,28 +1,21 @@
 // Renderer.cpp
 #include "Renderer.h"
+#include "Vertex.h"
+#include "ModelLoader.h"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <d3dcompiler.h>
 #include <d3d12sdklayers.h>
 #include <wrl.h>
 #include "d3dx12.h"
+#include <memory>
+#include <string>
+#include <iostream>
+#include <d3dcompiler.h>
 
 using namespace Microsoft::WRL;
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
-
-struct Vertex
-{
-    XMFLOAT3 position;
-    XMFLOAT4 color;
-};
-
-Vertex triangleVertices[] =
-{
-    { XMFLOAT3( 0.0f,  0.5f, 0.0f ), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) }, // Top
-    { XMFLOAT3( 0.5f, -0.5f, 0.0f ), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) }, // Right
-    { XMFLOAT3(-0.5f, -0.5f, 0.0f ), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) }  // Left
-};
 
 void Renderer::Initialize(HWND hwnd)
 {
@@ -35,7 +28,12 @@ void Renderer::Initialize(HWND hwnd)
     CreateRootSignature();
     CreatePipelineState();
     CreateCommandList();
-    CreateVertexBuffer();
+
+    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\cube.obj", m_vertices, m_indices)) {
+        std::cerr << "Failed to load the model!" << std::endl;
+    }
+
+    CreateVertexBuffer(m_vertices,m_indices);
 }
 
 void Renderer::CreateFence()
@@ -216,29 +214,79 @@ void Renderer::CreatePipelineState()
         { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
+    // 定义根参数，绑定常量缓冲区
+    D3D12_ROOT_PARAMETER rootParameters[1] = {};
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // 常量缓冲区
+    rootParameters[0].Descriptor.ShaderRegister = 0;   // 在着色器中的寄存器位置
+    rootParameters[0].Descriptor.RegisterSpace = 0;     // 注册空间，通常为 0
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // 顶点着色器可见
+
+    // 根签名描述符
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = ARRAYSIZE(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    // 生成根签名
+    ComPtr<ID3D12RootSignature> m_rootSignature;
+    ID3DBlob* signatureBlob = nullptr;
+    ID3DBlob* errorBlob = nullptr;
+
+    // 序列化根签名
+    HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &signatureBlob, &errorBlob);
+    if (FAILED(hr)) {
+        if (errorBlob) {
+            std::cout << "Root signature error: " << static_cast<char*>(errorBlob->GetBufferPointer()) << std::endl;
+        }
+        throw std::runtime_error("Failed to serialize root signature");
+    }
+
+    // 创建根签名
+    hr = m_device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
+    if (FAILED(hr)) {
+        std::cout << "Failed to create root signature. HRESULT: " << hr << std::endl;
+        throw std::runtime_error("Failed to create root signature");
+    }
+
+    // 创建管线状态对象描述
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.InputLayout = { layout, ARRAYSIZE(layout) };
     psoDesc.pRootSignature = m_rootSignature.Get();
     psoDesc.VS = { reinterpret_cast<BYTE*>(m_vertexShader->GetBufferPointer()), m_vertexShader->GetBufferSize() };
     psoDesc.PS = { reinterpret_cast<BYTE*>(m_pixelShader->GetBufferPointer()), m_pixelShader->GetBufferSize() };
+
+    // 配置光栅化状态
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK; // 背面剔除
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+
+    // 配置混合状态
     psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+
+    // 配置深度和模板状态
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    psoDesc.DepthStencilState.DepthEnable = TRUE;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+
+    // 配置样本
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+    // 配置渲染目标格式
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // RGBA 8bit 格式
     psoDesc.SampleDesc.Count = 1;
 
-    HRESULT hr = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
+    // 创建图形管线状态对象
+    hr = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
     if (FAILED(hr)) {
-        std::cout << "Failed to create pipeline state" << std::endl;
+        std::cout << "Failed to create pipeline state. HRESULT: " << hr << std::endl;
         throw std::runtime_error("Failed to create pipeline state");
     }
 }
 
 
-void Renderer::CreateVertexBuffer()
+void Renderer::CreateVertexBuffer(const std::vector<Vertex>& vertices, const std::vector<UINT>& indices)
 {
     // 重置命令列表
     HRESULT hr = m_commandList->Reset(m_commandAllocator.Get(), nullptr);
@@ -246,22 +294,19 @@ void Renderer::CreateVertexBuffer()
         throw std::runtime_error("Failed to reset command list in CreateVertexBuffer");
     }
 
-    // 创建顶点缓冲区
-    const UINT vertexBufferSize = sizeof(triangleVertices);
+    UINT vertexBufferSize = static_cast<UINT>(vertices.size() * sizeof(Vertex));
 
-    // 创建 GPU 顶点缓冲区 (默认堆)
+    // 创建 GPU 顶点缓冲区
     hr = m_device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
         D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
-        IID_PPV_ARGS(&m_vertexBuffer)
+        __uuidof(ID3D12Resource),  // 显式指定类型
+        reinterpret_cast<void**>(m_vertexBuffer.GetAddressOf())
     );
-
-    if (FAILED(hr)) {
-        throw std::runtime_error("Failed to create vertex buffer");
-    }
+    if (FAILED(hr)) throw std::runtime_error("Failed to create vertex buffer");
 
     // 创建上传缓冲区
     ComPtr<ID3D12Resource> vertexBufferUpload;
@@ -273,25 +318,66 @@ void Renderer::CreateVertexBuffer()
         nullptr,
         IID_PPV_ARGS(&vertexBufferUpload)
     );
-
-    if (FAILED(hr)) {
-        throw std::runtime_error("Failed to create upload buffer");
-    }
+    if (FAILED(hr)) throw std::runtime_error("Failed to create upload buffer");
 
     // 复制顶点数据到上传缓冲区
     void* pData;
     vertexBufferUpload->Map(0, nullptr, &pData);
-    memcpy(pData, triangleVertices, sizeof(triangleVertices));
+    memcpy(pData, vertices.data(), vertexBufferSize);
     vertexBufferUpload->Unmap(0, nullptr);
 
     // 将数据从上传缓冲区复制到 GPU 顶点缓冲区
     m_commandList->CopyBufferRegion(m_vertexBuffer.Get(), 0, vertexBufferUpload.Get(), 0, vertexBufferSize);
 
     // 切换顶点缓冲区资源状态
-    auto resourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+    D3D12_RESOURCE_BARRIER resourceBarrier = {};
+    resourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         m_vertexBuffer.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+    m_commandList->ResourceBarrier(1, &resourceBarrier);
+
+    // 创建索引缓冲区
+    UINT indexBufferSize = static_cast<UINT>(indices.size() * sizeof(UINT));
+
+    // 创建 GPU 索引缓冲区
+    hr = m_device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        __uuidof(ID3D12Resource),  // 显式指定类型
+        reinterpret_cast<void**>(m_indexBuffer.GetAddressOf())
+    );
+    if (FAILED(hr)) throw std::runtime_error("Failed to create index buffer");
+
+    // 创建上传缓冲区
+    ComPtr<ID3D12Resource> indexBufferUpload;
+    hr = m_device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&indexBufferUpload)
+    );
+    if (FAILED(hr)) throw std::runtime_error("Failed to create index upload buffer");
+
+    // 复制索引数据到上传缓冲区
+    indexBufferUpload->Map(0, nullptr, &pData);
+    memcpy(pData, indices.data(), indexBufferSize);
+    indexBufferUpload->Unmap(0, nullptr);
+
+    // 将数据从上传缓冲区复制到 GPU 索引缓冲区
+    m_commandList->CopyBufferRegion(m_indexBuffer.Get(), 0, indexBufferUpload.Get(), 0, indexBufferSize);
+
+    // 切换索引缓冲区资源状态
+    resourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_indexBuffer.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_INDEX_BUFFER
     );
     m_commandList->ResourceBarrier(1, &resourceBarrier);
 
@@ -366,62 +452,34 @@ void Renderer::ExecuteCommandList()
     // Set root signature
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
-    // Define the vertex data for the triangle
-    Vertex vertices[] = {
-        {{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},  // Vertex 1
-        {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}}, // Vertex 2
-        {{-0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}} // Vertex 3
-    };
-
-    // Calculate the size of the vertex buffer
-    UINT vertexBufferSize = sizeof(vertices);
-
-    // Check if the vertex buffer already exists, if not, create it
-    if (!m_vertexBuffer) {
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;  // Use an upload heap for CPU access
-
-        D3D12_RESOURCE_DESC bufferDesc = {};
-        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        bufferDesc.Width = vertexBufferSize;
-        bufferDesc.Height = 1;
-        bufferDesc.DepthOrArraySize = 1;
-        bufferDesc.MipLevels = 1;
-        bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
-        bufferDesc.SampleDesc.Count = 1;
-        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-        HRESULT hr = m_device->CreateCommittedResource(
-            &heapProps,
-            D3D12_HEAP_FLAG_NONE,
-            &bufferDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&m_vertexBuffer)
-        );
-        if (FAILED(hr)) {
-            throw std::runtime_error("Failed to create vertex buffer");
-        }
-        // Copy the vertex data to the buffer
-        void* pData;
-        m_vertexBuffer->Map(0, nullptr, &pData);
-        memcpy(pData, vertices, vertexBufferSize);
-        m_vertexBuffer->Unmap(0, nullptr);
-    }
-
-    // Create the vertex buffer view
+    // Bind vertex buffer
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
     vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    vertexBufferView.SizeInBytes = vertexBufferSize;
+    vertexBufferView.SizeInBytes = static_cast<UINT>(m_vertices.size() * sizeof(Vertex));
     vertexBufferView.StrideInBytes = sizeof(Vertex);
 
-    // Set the primitive topology
-    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // Bind index buffer (assuming m_indexBuffer is already created in Initialize or elsewhere)
+    D3D12_INDEX_BUFFER_VIEW indexBufferView = {};
+    indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
+    indexBufferView.SizeInBytes = static_cast<UINT>(m_indices.size() * sizeof(UINT));
+    indexBufferView.Format = DXGI_FORMAT_R32_UINT;  // Assuming indices are 32-bit unsigned integers
 
-    // Bind the vertex buffer and issue the draw call
+    // Set the primitive topology based on the model's data
+    if (m_indices.size() % 3 == 0) {
+        // If the model has a multiple of 3 indices, assume it is a triangle list
+        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    } else {
+        // Otherwise, set it based on the model type (you can customize this check)
+        std::cerr << "Unknown topology, defaulting to triangle list" << std::endl;
+        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    }
+
+    // Bind vertex and index buffers
     m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
-    m_commandList->DrawInstanced(3, 1, 0, 0);
+    m_commandList->IASetIndexBuffer(&indexBufferView);
+
+    // Draw indexed model
+    m_commandList->DrawIndexedInstanced(m_indices.size(), 1, 0, 0, 0);
 
     // Close the command list
     try {
