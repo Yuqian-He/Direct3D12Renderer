@@ -25,15 +25,86 @@ void Renderer::Initialize(HWND hwnd)
     CreateSwapChain(hwnd);
     CreateDescriptorHeaps();
     LoadShaders();
+    CreateConstantBuffer();
+    CreateLightBuffer();
     CreateRootSignature();
     CreatePipelineState();
     CreateCommandList();
 
-    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\cube.obj", m_vertices, m_indices)) {
+    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\test.obj", m_vertices, m_indices)) {
         std::cerr << "Failed to load the model!" << std::endl;
     }
 
     CreateVertexBuffer(m_vertices,m_indices);
+}
+
+void Renderer::CreateConstantBuffer() {
+    // 创建常量缓冲区
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+    heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+    D3D12_RESOURCE_DESC bufferDesc = {};
+    bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Alignment = 0;
+    bufferDesc.Width = sizeof(CameraBuffer);  // 常量缓冲区大小
+    bufferDesc.Height = 1;
+    bufferDesc.DepthOrArraySize = 1;
+    bufferDesc.MipLevels = 1;
+    bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+    bufferDesc.SampleDesc.Count = 1;
+    bufferDesc.SampleDesc.Quality = 0;
+    bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    // 创建上传缓冲区
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &bufferDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_cameraBuffer)
+    );
+
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to create constant buffer.");
+    }
+}
+
+void Renderer::CreateLightBuffer() {
+    // 创建光照常量缓冲区
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+    heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+    D3D12_RESOURCE_DESC bufferDesc = {};
+    bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Alignment = 0;
+    bufferDesc.Width = sizeof(LightBuffer);  // 光照常量缓冲区大小
+    bufferDesc.Height = 1;
+    bufferDesc.DepthOrArraySize = 1;
+    bufferDesc.MipLevels = 1;
+    bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+    bufferDesc.SampleDesc.Count = 1;
+    bufferDesc.SampleDesc.Quality = 0;
+    bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &bufferDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_lightBuffer)
+    );
+
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to create light constant buffer.");
+    }
 }
 
 void Renderer::CreateFence()
@@ -112,18 +183,16 @@ void Renderer::CreateDescriptorHeaps()
         throw std::runtime_error("Failed to create RTV descriptor heap");
     }
 
-    // 为每个交换链缓冲区创建 RTV 描述符
-    for (UINT i = 0; i < m_swapChainBufferCount; i++) {
-        hr = m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i]));
-        if (FAILED(hr)) {
-            throw std::runtime_error("Failed to get swap chain buffer");
-        }
-
-        // 创建渲染目标视图
-        m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
-        // 移动到下一个描述符
-        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
-        rtvHandle.ptr = rtvHandle.ptr + m_rtvDescriptorSize;
+    m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    
+    // Create frame resources.
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
+    // Create a RTV for each frame.
+    for (UINT n = 0; n < m_swapChainBufferCount; n++)
+    {
+        m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n]));
+        m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHandle);
+        rtvHandle.Offset(1, m_rtvDescriptorSize);
     }
 }
 
@@ -134,6 +203,13 @@ void Renderer::LoadShaders()
     const std::wstring vertexShaderPath = L"D:\\Personal Project\\Direct3D12Renderer\\shaders\\vertex_shader.hlsl";
     const std::wstring pixelShaderPath = L"D:\\Personal Project\\Direct3D12Renderer\\shaders\\pixel_shader.hlsl";
 
+// 编译标志，动态支持 Debug 和 Release 模式
+#if defined(_DEBUG)
+    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    UINT compileFlags = 0;
+#endif
+
     // 编译顶点着色器
     Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBlob;
     Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderErrorBlob;
@@ -141,9 +217,9 @@ void Renderer::LoadShaders()
         vertexShaderPath.c_str(),
         nullptr,  // 可以传递自定义的宏定义
         nullptr,  // 传递自定义的 include 文件
-        "main",   // 着色器的入口函数名
+        "VSMain",   // 着色器的入口函数名
         "vs_5_0", // 指定编译目标模型
-        D3DCOMPILE_ENABLE_STRICTNESS, // 启用严格模式
+        compileFlags, // 启用严格模式
         0, // 默认编译标志
         &vertexShaderBlob,
         &vertexShaderErrorBlob
@@ -163,9 +239,9 @@ void Renderer::LoadShaders()
         pixelShaderPath.c_str(),
         nullptr,  // 可以传递自定义的宏定义
         nullptr,  // 传递自定义的 include 文件
-        "main",   // 着色器的入口函数名
+        "PSMain",   // 着色器的入口函数名
         "ps_5_0", // 指定编译目标模型
-        D3DCOMPILE_ENABLE_STRICTNESS, // 启用严格模式
+        compileFlags, // 启用严格模式
         0, // 默认编译标志
         &pixelShaderBlob,
         &pixelShaderErrorBlob
@@ -181,59 +257,40 @@ void Renderer::LoadShaders()
     // 将编译后的着色器保存到成员变量中
     m_vertexShader = vertexShaderBlob;
     m_pixelShader = pixelShaderBlob;
+
+    std::cout << "Vertex shader size: " << vertexShaderBlob->GetBufferSize() << std::endl;
+    std::cout << "Pixel shader size: " << pixelShaderBlob->GetBufferSize() << std::endl;
+
 }
 
 
 void Renderer::CreateRootSignature()
 {
-    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    // 创建根签名
-    ComPtr<ID3DBlob> signature;
-    ComPtr<ID3DBlob> error;
-
-    HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
-    if (FAILED(hr)) {
-        std::cout << "Failed to serialize root signature" << std::endl;
-        throw std::runtime_error("Failed to serialize root signature");
-    }
-
-    hr = m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
-    if (FAILED(hr)) {
-        std::cout << "Failed to create root signature" << std::endl;
-        throw std::runtime_error("Failed to create root signature");
-    }
-}
-
-void Renderer::CreatePipelineState()
-{
-    // 创建输入布局
-    D3D12_INPUT_ELEMENT_DESC layout[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-
     // 定义根参数，绑定常量缓冲区
-    D3D12_ROOT_PARAMETER rootParameters[1] = {};
-    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // 常量缓冲区
-    rootParameters[0].Descriptor.ShaderRegister = 0;   // 在着色器中的寄存器位置
-    rootParameters[0].Descriptor.RegisterSpace = 0;     // 注册空间，通常为 0
-    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // 顶点着色器可见
+    D3D12_ROOT_PARAMETER rootParameters[2] = {};
 
-    // 根签名描述符
+    // 绑定矩阵常量缓冲区
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[0].Descriptor.ShaderRegister = 0; // 绑定到寄存器 0
+    rootParameters[0].Descriptor.RegisterSpace = 0;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+    // 绑定光源常量缓冲区
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].Descriptor.ShaderRegister = 1; // 绑定到寄存器 1
+    rootParameters[1].Descriptor.RegisterSpace = 0;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // 定义根签名描述符
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = ARRAYSIZE(rootParameters);
     rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-    // 生成根签名
-    ComPtr<ID3D12RootSignature> m_rootSignature;
-    ID3DBlob* signatureBlob = nullptr;
-    ID3DBlob* errorBlob = nullptr;
-
     // 序列化根签名
-    HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &signatureBlob, &errorBlob);
+    ComPtr<ID3DBlob> signatureBlob;
+    ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
     if (FAILED(hr)) {
         if (errorBlob) {
             std::cout << "Root signature error: " << static_cast<char*>(errorBlob->GetBufferPointer()) << std::endl;
@@ -247,43 +304,69 @@ void Renderer::CreatePipelineState()
         std::cout << "Failed to create root signature. HRESULT: " << hr << std::endl;
         throw std::runtime_error("Failed to create root signature");
     }
+}
 
-    // 创建管线状态对象描述
+void Renderer::CreatePipelineState()
+{
+    // 定义输入布局
+    static const D3D12_INPUT_ELEMENT_DESC layout[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+    };
+
+    // 输出输入布局的详细信息
+    std::cout << "Input Layout:" << std::endl;
+    for (size_t i = 0; i < ARRAYSIZE(layout); ++i) {
+        std::cout << "Element " << i << " : " 
+                  << "SemanticName = " << layout[i].SemanticName << ", "
+                  << "Format = " << layout[i].Format << " (" << static_cast<int>(layout[i].Format) << "), "
+                  << "AlignedByteOffset = " << layout[i].AlignedByteOffset << std::endl;
+    }
+
+    // 配置图形管线状态对象描述符
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.InputLayout = { layout, ARRAYSIZE(layout) };
     psoDesc.pRootSignature = m_rootSignature.Get();
     psoDesc.VS = { reinterpret_cast<BYTE*>(m_vertexShader->GetBufferPointer()), m_vertexShader->GetBufferSize() };
     psoDesc.PS = { reinterpret_cast<BYTE*>(m_pixelShader->GetBufferPointer()), m_pixelShader->GetBufferSize() };
 
-    // 配置光栅化状态
+    // 输出顶点和像素着色器的详细信息
+    std::cout << "Vertex Shader Size: " << m_vertexShader->GetBufferSize() << " bytes" << std::endl;
+    std::cout << "Pixel Shader Size: " << m_pixelShader->GetBufferSize() << " bytes" << std::endl;
+
+    // 配置状态
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK; // 背面剔除
-    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-
-    // 配置混合状态
     psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-
-    // 配置深度和模板状态
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     psoDesc.DepthStencilState.DepthEnable = TRUE;
-    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-
-    // 配置样本
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-
-    // 配置渲染目标格式
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // RGBA 8bit 格式
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
     psoDesc.SampleDesc.Count = 1;
 
+    // 输出管线状态描述符的详细信息
+    std::cout << "Pipeline State Descriptor:" << std::endl;
+    std::cout << "Primitive Topology Type: " << psoDesc.PrimitiveTopologyType << " (D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE)" << std::endl;
+    std::cout << "RTV Format: " << psoDesc.RTVFormats[0] << " (DXGI_FORMAT_R8G8B8A8_UNORM)" << std::endl;
+    std::cout << "Sample Count: " << psoDesc.SampleDesc.Count << std::endl;
+
+    std::cout << "Root signature: " << (m_rootSignature ? "Valid" : "Invalid") << std::endl;
+    std::cout << "Vertex shader: " << (m_vertexShader ? "Valid" : "Invalid") << std::endl;
+    std::cout << "Pixel shader: " << (m_pixelShader ? "Valid" : "Invalid") << std::endl;
+
     // 创建图形管线状态对象
-    hr = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
+    HRESULT hr = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
     if (FAILED(hr)) {
         std::cout << "Failed to create pipeline state. HRESULT: " << hr << std::endl;
         throw std::runtime_error("Failed to create pipeline state");
     }
+
+    std::cout << "Pipeline state created successfully!" << std::endl;
 }
+
 
 
 void Renderer::CreateVertexBuffer(const std::vector<Vertex>& vertices, const std::vector<UINT>& indices)
@@ -412,9 +495,6 @@ void Renderer::WaitForGpu()
     m_fenceValue++;
 }
 
-
-
-
 void Renderer::CreateCommandList()
 {
 
@@ -449,9 +529,6 @@ void Renderer::ExecuteCommandList()
         return;
     }
 
-    // Set root signature
-    m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-
     // Bind vertex buffer
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {};
     vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
@@ -464,14 +541,13 @@ void Renderer::ExecuteCommandList()
     indexBufferView.SizeInBytes = static_cast<UINT>(m_indices.size() * sizeof(UINT));
     indexBufferView.Format = DXGI_FORMAT_R32_UINT;  // Assuming indices are 32-bit unsigned integers
 
-    // Set the primitive topology based on the model's data
     if (m_indices.size() % 3 == 0) {
         // If the model has a multiple of 3 indices, assume it is a triangle list
-        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     } else {
         // Otherwise, set it based on the model type (you can customize this check)
         std::cerr << "Unknown topology, defaulting to triangle list" << std::endl;
-        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     }
 
     // Bind vertex and index buffers
@@ -497,6 +573,8 @@ void Renderer::Render()
 {
     // 获取当前后台缓冲区索引
     UINT backBufferIndex = m_swapChain->GetCurrentBackBufferIndex();
+
+    m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
     // 设置资源屏障，将后台缓冲区从 PRESENT 转换为 RENDER_TARGET
     CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -536,12 +614,51 @@ void Renderer::Render()
     m_commandList->RSSetScissorRects(1, &scissorRect);
 
     // 清除渲染目标视图和深度目标视图
-    const FLOAT clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f }; // 深蓝色
+    const FLOAT clearColor[] = { 0.0f, 0.5f, 0.4f, 1.0f }; // 深蓝色
     m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
     if (m_dsvHeap) {
         m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
     }
 
+    // 计算视图矩阵
+    DirectX::XMVECTOR eyePos = DirectX::XMVectorSet(0.0f, 0.0f, -60.0f, 0.0f);
+    DirectX::XMVECTOR targetPos = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f); // 目标点
+    DirectX::XMVECTOR upDir = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);    // 上方向
+
+    // 创建视图矩阵（左手坐标系）
+    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(eyePos, targetPos, upDir);
+
+    // 创建投影矩阵
+    float fov = DirectX::XMConvertToRadians(45.0f); // 45度视野
+    float aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height); // 屏幕宽高比
+    float nearZ = 0.1f;
+    float farZ = 200.0f;
+
+    // 投影矩阵（左手坐标系）
+    DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspectRatio, nearZ, farZ);
+
+    // 创建常量缓冲区的数据
+    CameraBuffer cameraData;
+    cameraData.worldMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity()); // 世界矩阵（无变换）
+    cameraData.viewMatrix = DirectX::XMMatrixTranspose(viewMatrix);  // 转置视图矩阵
+    cameraData.projectionMatrix = DirectX::XMMatrixTranspose(projectionMatrix);  // 转置投影矩阵
+    cameraData.worldMatrix = DirectX::XMMatrixTranspose(
+        DirectX::XMMatrixScaling(0.07f, 0.07f, 0.07f) *
+        DirectX::XMMatrixTranslation(0.0f, 0.0f, -30.0f) // 改变 Z 坐标位置
+    );
+    // 更新常量缓冲区
+    D3D12_RANGE readRange = { 0, 0 }; // 不进行读取
+    void* pData;
+    HRESULT hr = m_cameraBuffer->Map(0, &readRange, &pData);
+    if (SUCCEEDED(hr)) {
+        memcpy(pData, &cameraData, sizeof(cameraData));
+        m_cameraBuffer->Unmap(0, nullptr);
+    }
+
+    // 将常量缓冲区绑定到顶点着色器
+    m_commandList->SetGraphicsRootConstantBufferView(0, m_cameraBuffer->GetGPUVirtualAddress());
+
+    UpdateLightBuffer();
 
     // Execute the command list (draw the triangle)
     ExecuteCommandList();
@@ -571,4 +688,22 @@ void Renderer::Render()
     } catch (const std::exception& e) {
         std::cout << "Error during command allocator reset: " << e.what() << std::endl;
     }
+}
+
+void Renderer::UpdateLightBuffer() {
+    LightBuffer lightData;
+    lightData.lightPosition = DirectX::XMFLOAT4(0.0f, 10.0f, 0.0f, 1.0f); // 设置光源位置
+    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);    // 设置光源颜色（白色）
+
+    // 更新光照常量缓冲区
+    void* pData;
+    HRESULT hr = m_lightBuffer->Map(0, nullptr, &pData);
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to map light buffer.");
+    }
+
+    memcpy(pData, &lightData, sizeof(LightBuffer));
+    m_lightBuffer->Unmap(0, nullptr);
+
+    m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
 }

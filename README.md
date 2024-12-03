@@ -48,8 +48,8 @@ Develop a real-time global illumination rendering engine capable of computing in
 
 **Tasks:**
 - ✅ Implement Root Signature and PSO.  
-- [ ] Add camera movement.
-- [ ] Load simple models.  
+- ✅ Add camera movement.
+- ✅ Load simple models.  
 - [ ] Implement dynamic lighting and shadow mapping.  
 
 **Timeframe:** 2024-11-30 to 2024-12-14  

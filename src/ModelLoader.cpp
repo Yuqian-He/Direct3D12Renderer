@@ -16,7 +16,17 @@ bool ModelLoader::LoadOBJ(const std::string& filename,
         return false;
     }
 
+    std::cout << "Loaded OBJ file successfully!" << std::endl;
+    std::cout << "Number of shapes: " << shapes.size() << std::endl;
+    std::cout << "Number of vertices: " << attrib.vertices.size() / 3 << std::endl;
+    std::cout << "Number of normals: " << attrib.normals.size() / 3 << std::endl;
+    std::cout << "Number of texcoords: " << attrib.texcoords.size() / 2 << std::endl;
+
+    int vertexCount = 0;
+    int indexCount = 0;
+
     for (const auto& shape : shapes) {
+        std::cout << "Processing shape: " << shape.name << std::endl;
         for (const auto& index : shape.mesh.indices) {
             Vertex vertex = {};
             vertex.Position = {
@@ -40,10 +50,26 @@ bool ModelLoader::LoadOBJ(const std::string& filename,
                 };
             }
 
+            // Debug output: print some vertex data
+            if (vertexCount < 5) { // Print first 5 vertices for inspection
+                std::cout << "Vertex " << vertexCount << " - Position: ("
+                          << vertex.Position.x << ", " << vertex.Position.y << ", " << vertex.Position.z
+                          << "), Normal: ("
+                          << vertex.Normal.x << ", " << vertex.Normal.y << ", " << vertex.Normal.z
+                          << "), TexCoord: ("
+                          << vertex.TexCoord.x << ", " << vertex.TexCoord.y << ")" << std::endl;
+            }
+
             vertices.push_back(vertex);
-            indices.push_back(indices.size());
+            indices.push_back(indexCount);
+            indexCount++;
+            vertexCount++;
         }
     }
 
+    std::cout << "Total vertices loaded: " << vertexCount << std::endl;
+    std::cout << "Total indices loaded: " << indexCount << std::endl;
+
     return true;
 }
+

@@ -12,11 +12,21 @@
 #include <wrl/client.h>
 #include <stdexcept>
 #include <iostream>
-#include <DirectXMath.h>
 #include <d3dcompiler.h>
 
 class Renderer {
 public:
+
+    struct CameraBuffer {
+        DirectX::XMMATRIX worldMatrix;
+        DirectX::XMMATRIX viewMatrix;
+        DirectX::XMMATRIX projectionMatrix;
+    };
+
+    struct LightBuffer {
+        DirectX::XMFLOAT4 lightPosition;  // 光源位置
+        DirectX::XMFLOAT4 lightColor;     // 光源颜色
+    };
 
     std::vector<Vertex> m_vertices;  // 或其他类型
     std::vector<UINT> m_indices;
@@ -36,6 +46,8 @@ public:
     void ExecuteCommandList();
     void WaitForGpu();
     void CreateFence();
+    void CreateConstantBuffer();
+    void CreateLightBuffer();
 
 private:
     UINT m_width = 800;  // 窗口宽度
@@ -47,6 +59,7 @@ private:
     void CreateSwapChain(HWND hwnd);
 
     void ReleaseResources(); // Clean up resources when no longer needed
+    void UpdateLightBuffer();
 
     HRESULT hr;
 
@@ -61,6 +74,8 @@ private:
     Microsoft::WRL::ComPtr<ID3DBlob> m_pixelShader;
     Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_cameraBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_lightBuffer;
     uint64_t m_fenceValue = 1;
 
     static const UINT FRAME_COUNT = 2; // 假设交换链有两个后台缓冲区
