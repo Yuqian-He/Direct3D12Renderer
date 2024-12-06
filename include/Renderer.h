@@ -35,6 +35,7 @@ public:
 
     void Initialize(HWND hwnd);
     void Render();
+    bool RenderOBJModel();
 
     // 使这些函数可以在外部调用
     void LoadShaders();

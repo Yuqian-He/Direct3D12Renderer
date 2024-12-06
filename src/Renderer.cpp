@@ -31,7 +31,7 @@ void Renderer::Initialize(HWND hwnd)
     CreatePipelineState();
     CreateCommandList();
 
-    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\test.obj", m_vertices, m_indices)) {
+    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\torus.obj", m_vertices, m_indices)) {
         std::cerr << "Failed to load the model!" << std::endl;
     }
 
@@ -621,7 +621,7 @@ void Renderer::Render()
     }
 
     // 计算视图矩阵
-    DirectX::XMVECTOR eyePos = DirectX::XMVectorSet(0.0f, 0.0f, -60.0f, 0.0f);
+    DirectX::XMVECTOR eyePos = DirectX::XMVectorSet(0.0f, 2.0f, -5.0f, 0.0f);
     DirectX::XMVECTOR targetPos = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f); // 目标点
     DirectX::XMVECTOR upDir = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);    // 上方向
 
@@ -632,7 +632,7 @@ void Renderer::Render()
     float fov = DirectX::XMConvertToRadians(45.0f); // 45度视野
     float aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height); // 屏幕宽高比
     float nearZ = 0.1f;
-    float farZ = 200.0f;
+    float farZ =  100.0f;
 
     // 投影矩阵（左手坐标系）
     DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspectRatio, nearZ, farZ);
@@ -642,10 +642,7 @@ void Renderer::Render()
     cameraData.worldMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity()); // 世界矩阵（无变换）
     cameraData.viewMatrix = DirectX::XMMatrixTranspose(viewMatrix);  // 转置视图矩阵
     cameraData.projectionMatrix = DirectX::XMMatrixTranspose(projectionMatrix);  // 转置投影矩阵
-    cameraData.worldMatrix = DirectX::XMMatrixTranspose(
-        DirectX::XMMatrixScaling(0.07f, 0.07f, 0.07f) *
-        DirectX::XMMatrixTranslation(0.0f, 0.0f, -30.0f) // 改变 Z 坐标位置
-    );
+
     // 更新常量缓冲区
     D3D12_RANGE readRange = { 0, 0 }; // 不进行读取
     void* pData;
@@ -692,8 +689,8 @@ void Renderer::Render()
 
 void Renderer::UpdateLightBuffer() {
     LightBuffer lightData;
-    lightData.lightPosition = DirectX::XMFLOAT4(0.0f, 10.0f, 0.0f, 1.0f); // 设置光源位置
-    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);    // 设置光源颜色（白色）
+    lightData.lightPosition = DirectX::XMFLOAT4(5.0f, 5.0f, 5.0f, 1.0f); // 设置光源位置
+    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 0.75f, 0.8f, 1.0f);
 
     // 更新光照常量缓冲区
     void* pData;

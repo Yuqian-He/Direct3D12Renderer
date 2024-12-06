@@ -10,8 +10,9 @@ struct VSInput {
 // 定义输出结构体，传递到片段着色器
 struct PSInput {
     float4 position : SV_POSITION; // 裁剪空间中的位置
+    float3 worldPos : TEXCOORD0;
     float4 color : COLOR;          // 颜色
-    float3 normal : TEXCOORD0;     // 传递到片段着色器的法线
+    float3 normal : TEXCOORD1;     // 传递到片段着色器的法线
 };
 
 // 常量缓冲区，用于传递变换矩阵
@@ -32,9 +33,12 @@ PSInput VSMain(VSInput input) {
 
     // 传递颜色数据
     output.color = input.color;
+    output.worldPos = worldPos.xyz;
 
-    // 将法线从模型空间转换到世界空间并传递给片段着色器
-    output.normal = normalize(mul(input.normal, (float3x3)worldMatrix)); // 法线变换到世界空间
+    // 将法线从模型空间转换到世界空间，并进行适当的逆转置变换
+    // 使用逆转置矩阵变换法线
+    output.normal = mul(input.normal, (float3x3)worldMatrix); // 法线变换到世界空间
 
-    return output;
+    return output; 
 }
+
