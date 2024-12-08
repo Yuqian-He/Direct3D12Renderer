@@ -24,6 +24,7 @@ void Renderer::Initialize(HWND hwnd)
     CreateFence();   
     CreateSwapChain(hwnd);
     CreateDescriptorHeaps();
+    CreateDepthStencilBuffer();
     LoadShaders();
     CreateConstantBuffer();
     CreateLightBuffer();
@@ -31,12 +32,57 @@ void Renderer::Initialize(HWND hwnd)
     CreatePipelineState();
     CreateCommandList();
 
-    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\torus.obj", m_vertices, m_indices)) {
+    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\combine.obj", m_vertices, m_indices)) {
         std::cerr << "Failed to load the model!" << std::endl;
     }
 
     CreateVertexBuffer(m_vertices,m_indices);
 }
+
+void Renderer::CreateDepthStencilBuffer()
+{
+    // Create depth buffer properties
+    D3D12_RESOURCE_DESC depthStencilDesc = {};
+    depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    depthStencilDesc.Width = m_width;  // Set width
+    depthStencilDesc.Height = m_height; // Set height
+    depthStencilDesc.MipLevels = 1;
+    depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;  // Depth format
+    depthStencilDesc.SampleDesc.Count = 1;  // Single sample
+    depthStencilDesc.SampleDesc.Quality = 0;
+    depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;  // Allows depth/stencil
+    depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    // Define the clear value for depth buffer
+    D3D12_CLEAR_VALUE clearValue = {};
+    clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+    clearValue.DepthStencil.Depth = 1.0f;  // Clear to 1.0 (max depth)
+    clearValue.DepthStencil.Stencil = 0;   // Clear stencil to 0
+
+    // Create the depth/stencil buffer resource
+    HRESULT hr = m_device->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT), // Default heap
+        D3D12_HEAP_FLAG_NONE,
+        &depthStencilDesc,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,  // Initial state
+        &clearValue,
+        IID_PPV_ARGS(&m_depthStencilBuffer)
+    );
+
+    if (FAILED(hr)) {
+        std::cerr << "Failed to create depth/stencil buffer. HRESULT: " << hr << std::endl;
+        return;
+    }
+
+    // Create Depth-Stencil View (DSV)
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+    dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;  // Depth format
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+    m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &dsvDesc, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
+}
+
 
 void Renderer::CreateConstantBuffer() {
     // 创建常量缓冲区
@@ -193,6 +239,17 @@ void Renderer::CreateDescriptorHeaps()
         m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n]));
         m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHandle);
         rtvHandle.Offset(1, m_rtvDescriptorSize);
+    }
+
+    // Create DSV descriptor heap
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+    dsvHeapDesc.NumDescriptors = 1; // Only one depth/stencil buffer is needed
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; // Depth-Stencil View type
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+    hr = m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_dsvHeap));
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to create DSV descriptor heap.");
     }
 }
 
@@ -620,31 +677,29 @@ void Renderer::Render()
         m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
     }
 
-    // 计算视图矩阵
-    DirectX::XMVECTOR eyePos = DirectX::XMVectorSet(0.0f, 2.0f, -5.0f, 0.0f);
-    DirectX::XMVECTOR targetPos = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f); // 目标点
-    DirectX::XMVECTOR upDir = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);    // 上方向
+    // New camera position
+    DirectX::XMVECTOR eyePos = DirectX::XMVectorSet(4.0f, 3.0f, -10.0f, 0.0f); // Further back and higher
+    DirectX::XMVECTOR targetPos = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f); // Look at the origin
+    DirectX::XMVECTOR upDir = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);    // Keep the up direction
 
-    // 创建视图矩阵（左手坐标系）
+    // View matrix
     DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(eyePos, targetPos, upDir);
 
-    // 创建投影矩阵
-    float fov = DirectX::XMConvertToRadians(45.0f); // 45度视野
-    float aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height); // 屏幕宽高比
+    // Projection matrix
+    float fov = DirectX::XMConvertToRadians(60.0f); // Increased FOV for a wider view
+    float aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
     float nearZ = 0.1f;
-    float farZ =  100.0f;
-
-    // 投影矩阵（左手坐标系）
+    float farZ = 100.0f;
     DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspectRatio, nearZ, farZ);
 
-    // 创建常量缓冲区的数据
+    // Update the camera buffer
     CameraBuffer cameraData;
-    cameraData.worldMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity()); // 世界矩阵（无变换）
-    cameraData.viewMatrix = DirectX::XMMatrixTranspose(viewMatrix);  // 转置视图矩阵
-    cameraData.projectionMatrix = DirectX::XMMatrixTranspose(projectionMatrix);  // 转置投影矩阵
+    cameraData.worldMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity());
+    cameraData.viewMatrix = DirectX::XMMatrixTranspose(viewMatrix);
+    cameraData.projectionMatrix = DirectX::XMMatrixTranspose(projectionMatrix);
 
-    // 更新常量缓冲区
-    D3D12_RANGE readRange = { 0, 0 }; // 不进行读取
+    // Map and update constant buffer
+    D3D12_RANGE readRange = { 0, 0 }; // No read
     void* pData;
     HRESULT hr = m_cameraBuffer->Map(0, &readRange, &pData);
     if (SUCCEEDED(hr)) {
@@ -689,8 +744,8 @@ void Renderer::Render()
 
 void Renderer::UpdateLightBuffer() {
     LightBuffer lightData;
-    lightData.lightPosition = DirectX::XMFLOAT4(5.0f, 5.0f, 5.0f, 1.0f); // 设置光源位置
-    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 0.75f, 0.8f, 1.0f);
+    lightData.lightPosition = DirectX::XMFLOAT4(15.0f, 5.0f, 5.0f, 1.0f); // 设置光源位置
+    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
     // 更新光照常量缓冲区
     void* pData;

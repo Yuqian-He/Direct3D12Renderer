@@ -49,6 +49,7 @@ public:
     void CreateFence();
     void CreateConstantBuffer();
     void CreateLightBuffer();
+    void CreateDepthStencilBuffer();
 
 private:
     UINT m_width = 800;  // 窗口宽度
@@ -77,6 +78,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_cameraBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_lightBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencilBuffer;
     uint64_t m_fenceValue = 1;
 
     static const UINT FRAME_COUNT = 2; // 假设交换链有两个后台缓冲区
