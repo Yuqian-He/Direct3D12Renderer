@@ -2,6 +2,7 @@
 #include <d3d12.h>
 #include <vector>
 #include "Vertex.h"
+#include "Camera.h"
 #include <wrl.h>
 #include <DirectXMath.h>
 #include <stdexcept>
@@ -16,6 +17,8 @@
 
 class Renderer {
 public:
+    Renderer();
+    ~Renderer();
 
     struct CameraBuffer {
         DirectX::XMMATRIX worldMatrix;
@@ -52,10 +55,12 @@ public:
     void CreateDepthStencilBuffer();
 
 private:
+    Camera m_camera;
     UINT m_width = 800;  // 窗口宽度
     UINT m_height = 600; // 窗口高度
     UINT m_swapChainBufferCount = 2; // 默认使用双缓冲
 
+    void ProcessInput();
     void CreateDevice();
     void CreateCommandQueue();
     void CreateSwapChain(HWND hwnd);

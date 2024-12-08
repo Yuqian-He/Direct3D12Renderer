@@ -12,10 +12,15 @@
 #include <string>
 #include <iostream>
 #include <d3dcompiler.h>
+#include <Windows.h>
+#include <dinput.h>
 
 using namespace Microsoft::WRL;
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
+
+Renderer::Renderer() : m_camera({0.0f, 0.0f, -5.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}) {}
+Renderer::~Renderer() {}
 
 void Renderer::Initialize(HWND hwnd)
 {
@@ -192,8 +197,8 @@ void Renderer::CreateSwapChain(HWND hwnd)
 {
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = 2;
-    swapChainDesc.Width = 1280;
-    swapChainDesc.Height = 720;
+    swapChainDesc.Width = m_width;
+    swapChainDesc.Height = m_height;
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.SampleDesc.Count = 1;
@@ -677,29 +682,25 @@ void Renderer::Render()
         m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
     }
 
-    // New camera position
-    DirectX::XMVECTOR eyePos = DirectX::XMVectorSet(4.0f, 3.0f, -10.0f, 0.0f); // Further back and higher
-    DirectX::XMVECTOR targetPos = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f); // Look at the origin
-    DirectX::XMVECTOR upDir = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);    // Keep the up direction
+    // 更新摄像机视图矩阵：处理输入并更新摄像机
+    ProcessInput();  // 处理输入来更新相机状态
+    DirectX::XMMATRIX viewMatrix = m_camera.GetViewMatrix();  // 获取视图矩阵
 
-    // View matrix
-    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(eyePos, targetPos, upDir);
-
-    // Projection matrix
-    float fov = DirectX::XMConvertToRadians(60.0f); // Increased FOV for a wider view
+    // 更新投影矩阵（通常不会随相机更新而改变）
+    float fov = DirectX::XMConvertToRadians(60.0f);
     float aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
     float nearZ = 0.1f;
-    float farZ = 100.0f;
+    float farZ = 200.0f;
     DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(fov, aspectRatio, nearZ, farZ);
 
-    // Update the camera buffer
+    // 创建相机常量缓冲区数据
     CameraBuffer cameraData;
     cameraData.worldMatrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity());
     cameraData.viewMatrix = DirectX::XMMatrixTranspose(viewMatrix);
     cameraData.projectionMatrix = DirectX::XMMatrixTranspose(projectionMatrix);
 
-    // Map and update constant buffer
-    D3D12_RANGE readRange = { 0, 0 }; // No read
+    // 将相机常量缓冲区数据映射到 GPU
+    D3D12_RANGE readRange = { 0, 0 }; // 不进行读取
     void* pData;
     HRESULT hr = m_cameraBuffer->Map(0, &readRange, &pData);
     if (SUCCEEDED(hr)) {
@@ -759,3 +760,45 @@ void Renderer::UpdateLightBuffer() {
 
     m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
 }
+
+void Renderer::ProcessInput()
+{
+    // 获取当前的键盘和鼠标输入
+    if (GetAsyncKeyState('W') & 0x8000) {  // W 键（前进）
+        m_camera.MoveForward(0.1f);
+    }
+    if (GetAsyncKeyState('S') & 0x8000) {  // S 键（后退）
+        m_camera.MoveForward(-0.1f);
+    }
+    if (GetAsyncKeyState('A') & 0x8000) {  // A 键（左移）
+        m_camera.MoveRight(-0.1f);
+    }
+    if (GetAsyncKeyState('D') & 0x8000) {  // D 键（右移）
+        m_camera.MoveRight(0.1f);
+    }
+    if (GetAsyncKeyState('Q') & 0x8000) {  // Q 键（上移）
+        m_camera.MoveUp(0.1f);
+    }
+    if (GetAsyncKeyState('E') & 0x8000) {  // E 键（下移）
+        m_camera.MoveUp(-0.1f);
+    }
+
+    // 获取鼠标移动，控制相机旋转
+    POINT cursorPos;
+    GetCursorPos(&cursorPos);  // 获取鼠标相对屏幕的位置
+
+    // 计算鼠标的偏移量
+    static POINT lastCursorPos = cursorPos;  // 记录上一帧的鼠标位置
+    int deltaX = cursorPos.x - lastCursorPos.x;
+    int deltaY = cursorPos.y - lastCursorPos.y;
+
+    // 设置一个灵敏度因子来调节鼠标移动的幅度
+    float sensitivity = 0.1f;
+
+    // 调用相机的旋转函数
+    m_camera.Rotate(deltaX * sensitivity, -deltaY * sensitivity);  // 鼠标水平移动影响yaw，垂直移动影响pitch
+
+    // 更新上一帧的鼠标位置
+    lastCursorPos = cursorPos;
+}
+
