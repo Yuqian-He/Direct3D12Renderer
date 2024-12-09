@@ -29,6 +29,12 @@ public:
     struct LightBuffer {
         DirectX::XMFLOAT4 lightPosition;  // 光源位置
         DirectX::XMFLOAT4 lightColor;     // 光源颜色
+        DirectX::XMFLOAT4 ambientColor;
+        float ambientIntensity; 
+        DirectX::XMFLOAT3 viewPosition;    // 摄像机位置
+        float shininess;                   // 高光系数
+        float specularIntensity;
+        float padding;                     // 用于对齐 16 字节
     };
 
     std::vector<Vertex> m_vertices;  // 或其他类型

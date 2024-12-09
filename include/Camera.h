@@ -17,6 +17,7 @@ public:
 
     // 获取视图矩阵
     DirectX::XMMATRIX GetViewMatrix() const;
+    DirectX::XMFLOAT3 GetPosition() const;
 
     // 控制摄像机移动
     void MoveForward(float distance);
@@ -28,6 +29,7 @@ public:
 
     // 更新摄像机的速度（控制移动速度）
     void SetSpeed(float speed);
+
 
 private:
     DirectX::XMFLOAT3 m_position;  // 摄像机位置

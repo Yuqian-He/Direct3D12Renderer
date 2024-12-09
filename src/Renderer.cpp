@@ -746,7 +746,12 @@ void Renderer::Render()
 void Renderer::UpdateLightBuffer() {
     LightBuffer lightData;
     lightData.lightPosition = DirectX::XMFLOAT4(15.0f, 5.0f, 5.0f, 1.0f); // 设置光源位置
-    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f); // 设置环境光颜色
+    lightData.ambientColor = DirectX::XMFLOAT4(0.3f, 0.25f, 0.2f, 1.0f);   // 设置环境光强度
+    lightData.ambientIntensity = 0.6f;
+    lightData.viewPosition = m_camera.GetPosition();   
+    lightData.specularIntensity = 1.0f;    // 镜面反射强度
+    lightData.shininess = 64.0f;  // 高光系数
 
     // 更新光照常量缓冲区
     void* pData;

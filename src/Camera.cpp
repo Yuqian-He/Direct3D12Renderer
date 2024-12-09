@@ -15,13 +15,13 @@ Camera::Camera()
       m_up({ 0.0f, 1.0f, 0.0f }),
       m_yaw(0.0f),
       m_pitch(0.0f),
-      m_speed(1.0f)  // 默认速度
+      m_speed(0.01f)  // 默认速度
 {
     UpdateViewMatrix();
 }
 
 Camera::Camera(XMFLOAT3 position, XMFLOAT3 target, XMFLOAT3 up)
-    : m_position(position), m_target(target), m_up(up), m_yaw(0.0f), m_pitch(0.0f), m_speed(1.0f)
+    : m_position(position), m_target(target), m_up(up), m_yaw(0.0f), m_pitch(0.0f), m_speed(0.1f)
 {
     UpdateViewMatrix();
 }
@@ -106,4 +106,8 @@ void Camera::Rotate(float yawDelta, float pitchDelta) {
     XMStoreFloat3(&m_target, targetVec);
 
     UpdateViewMatrix();
+}
+
+DirectX::XMFLOAT3 Camera::GetPosition() const {
+    return m_position; 
 }
