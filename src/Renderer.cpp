@@ -47,45 +47,28 @@ void Renderer::Initialize(HWND hwnd)
 void Renderer::CreateDepthStencilBuffer()
 {
     // Create depth buffer properties
-    D3D12_RESOURCE_DESC depthStencilDesc = {};
-    depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    depthStencilDesc.Width = m_width;  // Set width
-    depthStencilDesc.Height = m_height; // Set height
-    depthStencilDesc.MipLevels = 1;
-    depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;  // Depth format
-    depthStencilDesc.SampleDesc.Count = 1;  // Single sample
-    depthStencilDesc.SampleDesc.Quality = 0;
-    depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;  // Allows depth/stencil
-    depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    D3D12_DEPTH_STENCIL_VIEW_DESC depthStencilDesc = {};
+    depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    depthStencilDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    depthStencilDesc.Flags = D3D12_DSV_FLAG_NONE;
 
-    // Define the clear value for depth buffer
-    D3D12_CLEAR_VALUE clearValue = {};
-    clearValue.Format = DXGI_FORMAT_D32_FLOAT;
-    clearValue.DepthStencil.Depth = 1.0f;  // Clear to 1.0 (max depth)
-    clearValue.DepthStencil.Stencil = 0;   // Clear stencil to 0
+    D3D12_CLEAR_VALUE depthOptimizedClearValue = {};
+    depthOptimizedClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+    depthOptimizedClearValue.DepthStencil.Depth = 1.0f;
+    depthOptimizedClearValue.DepthStencil.Stencil = 0;
 
     // Create the depth/stencil buffer resource
     HRESULT hr = m_device->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT), // Default heap
         D3D12_HEAP_FLAG_NONE,
-        &depthStencilDesc,
+        &CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, m_width, m_height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL),
         D3D12_RESOURCE_STATE_DEPTH_WRITE,  // Initial state
-        &clearValue,
-        IID_PPV_ARGS(&m_depthStencilBuffer)
+        &depthOptimizedClearValue,
+        IID_PPV_ARGS(&m_depthStencil)
     );
 
-    if (FAILED(hr)) {
-        std::cerr << "Failed to create depth/stencil buffer. HRESULT: " << hr << std::endl;
-        return;
-    }
+    m_device->CreateDepthStencilView(m_depthStencil.Get(), &depthStencilDesc, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
 
-    // Create Depth-Stencil View (DSV)
-    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-    dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;  // Depth format
-    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-    dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-
-    m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &dsvDesc, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
 }
 
 
@@ -377,47 +360,30 @@ void Renderer::CreatePipelineState()
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
-    // 输出输入布局的详细信息
-    std::cout << "Input Layout:" << std::endl;
-    for (size_t i = 0; i < ARRAYSIZE(layout); ++i) {
-        std::cout << "Element " << i << " : " 
-                  << "SemanticName = " << layout[i].SemanticName << ", "
-                  << "Format = " << layout[i].Format << " (" << static_cast<int>(layout[i].Format) << "), "
-                  << "AlignedByteOffset = " << layout[i].AlignedByteOffset << std::endl;
-    }
-
     // 配置图形管线状态对象描述符
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.InputLayout = { layout, ARRAYSIZE(layout) };
     psoDesc.pRootSignature = m_rootSignature.Get();
     psoDesc.VS = { reinterpret_cast<BYTE*>(m_vertexShader->GetBufferPointer()), m_vertexShader->GetBufferSize() };
     psoDesc.PS = { reinterpret_cast<BYTE*>(m_pixelShader->GetBufferPointer()), m_pixelShader->GetBufferSize() };
-
-    // 输出顶点和像素着色器的详细信息
-    std::cout << "Vertex Shader Size: " << m_vertexShader->GetBufferSize() << " bytes" << std::endl;
-    std::cout << "Pixel Shader Size: " << m_pixelShader->GetBufferSize() << " bytes" << std::endl;
-
-    // 配置状态
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+
+    // 设置深度模板状态
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     psoDesc.DepthStencilState.DepthEnable = TRUE;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    psoDesc.DepthStencilState.StencilEnable = FALSE; 
+
+    // 渲染目标和深度缓冲区格式
     psoDesc.NumRenderTargets = 1;
     psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.SampleDesc.Count = 1;
-
-    // 输出管线状态描述符的详细信息
-    std::cout << "Pipeline State Descriptor:" << std::endl;
-    std::cout << "Primitive Topology Type: " << psoDesc.PrimitiveTopologyType << " (D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE)" << std::endl;
-    std::cout << "RTV Format: " << psoDesc.RTVFormats[0] << " (DXGI_FORMAT_R8G8B8A8_UNORM)" << std::endl;
-    std::cout << "Sample Count: " << psoDesc.SampleDesc.Count << std::endl;
-
-    std::cout << "Root signature: " << (m_rootSignature ? "Valid" : "Invalid") << std::endl;
-    std::cout << "Vertex shader: " << (m_vertexShader ? "Valid" : "Invalid") << std::endl;
-    std::cout << "Pixel shader: " << (m_pixelShader ? "Valid" : "Invalid") << std::endl;
 
     // 创建图形管线状态对象
     HRESULT hr = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
@@ -745,13 +711,13 @@ void Renderer::Render()
 
 void Renderer::UpdateLightBuffer() {
     LightBuffer lightData;
-    lightData.lightPosition = DirectX::XMFLOAT4(15.0f, 5.0f, 5.0f, 1.0f); // 设置光源位置
+    lightData.lightPosition = DirectX::XMFLOAT4(0.0f, 0.0f, 2.0f, 1.0f); // 设置光源位置
     lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f); // 设置环境光颜色
     lightData.ambientColor = DirectX::XMFLOAT4(0.3f, 0.25f, 0.2f, 1.0f);   // 设置环境光强度
     lightData.ambientIntensity = 0.6f;
     lightData.viewPosition = m_camera.GetPosition();   
-    lightData.specularIntensity = 1.0f;    // 镜面反射强度
-    lightData.shininess = 64.0f;  // 高光系数
+    lightData.specularIntensity = 0.3f;    // 镜面反射强度
+    lightData.shininess = 500.0f;  // 高光系数
 
     // 更新光照常量缓冲区
     void* pData;

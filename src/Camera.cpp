@@ -92,19 +92,28 @@ void Camera::Rotate(float yawDelta, float pitchDelta) {
     // 限制 pitch 角范围 [-89, 89] 度
     m_pitch = clamp(m_pitch, -89.0f, 89.0f);
 
-    // 计算新的目标点
+    // 计算新的相机位置围绕目标点旋转
     float yawRadians = XMConvertToRadians(m_yaw);
     float pitchRadians = XMConvertToRadians(m_pitch);
 
-    XMFLOAT3 newTarget = {
+    // 假设目标点为世界中心 (0, 0, 0)，你可以改成任何指定点
+    XMVECTOR targetVec = XMLoadFloat3(&m_target);
+
+    // 根据 yaw 和 pitch 计算新位置
+    XMFLOAT3 newPosition = {
         cosf(yawRadians) * cosf(pitchRadians),
         sinf(pitchRadians),
         sinf(yawRadians) * cosf(pitchRadians)
     };
 
-    XMVECTOR targetVec = XMLoadFloat3(&m_position) + XMLoadFloat3(&newTarget);
-    XMStoreFloat3(&m_target, targetVec);
+    // 设置距离目标点的固定距离
+    float radius = XMVectorGetX(XMVector3Length(XMLoadFloat3(&m_position) - targetVec));
+    XMVECTOR newPosVec = targetVec + XMVectorScale(XMLoadFloat3(&newPosition), radius);
 
+    // 更新相机位置
+    XMStoreFloat3(&m_position, newPosVec);
+
+    // 更新视图矩阵
     UpdateViewMatrix();
 }
 

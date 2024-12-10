@@ -41,6 +41,7 @@ public:
     std::vector<UINT> m_indices;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencil;
 
     void Initialize(HWND hwnd);
     void Render();
