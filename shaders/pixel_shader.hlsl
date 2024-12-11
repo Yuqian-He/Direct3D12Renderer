@@ -17,6 +17,8 @@ cbuffer LightPixelBuffer : register(b1) {
     float3 viewPosition;    // 观察者位置
     float shininess;        // 高光系数
     float specularIntensity;
+    float4x4 lightViewMatrix;     // 光源视角矩阵
+    float4x4 lightProjectionMatrix; // 光源投影矩阵
 }
 
 // 片段着色器的主函数

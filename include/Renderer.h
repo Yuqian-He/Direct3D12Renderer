@@ -3,6 +3,7 @@
 #include <vector>
 #include "Vertex.h"
 #include "Camera.h"
+#include "Model.h"
 #include <wrl.h>
 #include <DirectXMath.h>
 #include <stdexcept>
@@ -34,6 +35,11 @@ public:
         DirectX::XMFLOAT3 viewPosition;    // 摄像机位置
         float shininess;                   // 高光系数
         float specularIntensity;
+
+        // 光源的视角矩阵和投影矩阵，用于阴影映射
+        DirectX::XMMATRIX viewMatrix;  // 光源视角矩阵
+        DirectX::XMMATRIX projectionMatrix; // 光源投影矩阵
+
         float padding;                     // 用于对齐 16 字节
     };
 
@@ -60,12 +66,16 @@ public:
     void CreateConstantBuffer();
     void CreateLightBuffer();
     void CreateDepthStencilBuffer();
+    void CreateShadowMap();
+    void InitializeModel(Model& model, const std::string& filePath);
 
 private:
     Camera m_camera;
     UINT m_width = 800;  // 窗口宽度
     UINT m_height = 600; // 窗口高度
     UINT m_swapChainBufferCount = 2; // 默认使用双缓冲
+    UINT shadowMapWidth = 800;
+    UINT shadowMapHeight = 600;
 
     void ProcessInput();
     void CreateDevice();
@@ -74,6 +84,7 @@ private:
 
     void ReleaseResources(); // Clean up resources when no longer needed
     void UpdateLightBuffer();
+    //void DrawSceneToShadowMap();
 
     HRESULT hr;
 
@@ -91,7 +102,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_cameraBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_lightBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencilBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_shadowMap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_shadowMapDSVHeap;
     uint64_t m_fenceValue = 1;
+    std::vector<Model> m_models; 
 
     static const UINT FRAME_COUNT = 2; // 假设交换链有两个后台缓冲区
     Microsoft::WRL::ComPtr<ID3D12Resource> m_renderTargets[FRAME_COUNT]; // 后台缓冲区数组

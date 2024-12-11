@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "Vertex.h"
 #include "ModelLoader.h"
+#include "Model.h"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <d3dcompiler.h>
@@ -37,11 +38,11 @@ void Renderer::Initialize(HWND hwnd)
     CreatePipelineState();
     CreateCommandList();
 
-    if (!ModelLoader::LoadOBJ("D:\\Personal Project\\Direct3D12Renderer\\models\\combine.obj", m_vertices, m_indices)) {
-        std::cerr << "Failed to load the model!" << std::endl;
-    }
+    Model myModel;
+    InitializeModel(myModel, "D:\\Personal Project\\Direct3D12Renderer\\models\\combine.obj");
+    CreateVertexBuffer(m_vertices, m_indices);
+    m_models.push_back(std::move(myModel));
 
-    CreateVertexBuffer(m_vertices,m_indices);
 }
 
 void Renderer::CreateDepthStencilBuffer()
@@ -241,6 +242,44 @@ void Renderer::CreateDescriptorHeaps()
     }
 }
 
+void Renderer::CreateShadowMap()
+{
+    // 创建 Shadow Map 的深度纹理
+    D3D12_RESOURCE_DESC shadowMapDesc = {};
+    shadowMapDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    shadowMapDesc.Alignment = 0;
+    shadowMapDesc.Width = shadowMapWidth;
+    shadowMapDesc.Height = shadowMapHeight;
+    shadowMapDesc.DepthOrArraySize = 1;
+    shadowMapDesc.MipLevels = 1;
+    shadowMapDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    shadowMapDesc.SampleDesc.Count = 1;
+    shadowMapDesc.SampleDesc.Quality = 0;
+    shadowMapDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    shadowMapDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    // 创建深度资源
+    D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    HRESULT hr = m_device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &shadowMapDesc,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        nullptr, // No clear value
+        IID_PPV_ARGS(&m_shadowMap)
+    );
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to create shadow map depth resource");
+    }
+
+    // 创建 DSV（深度视图）
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+    dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    dsvDesc.Texture2D.MipSlice = 0;
+    m_device->CreateDepthStencilView(m_shadowMap.Get(), &dsvDesc, m_shadowMapDSVHeap->GetCPUDescriptorHandleForHeapStart());
+}
+
 
 void Renderer::LoadShaders()
 {
@@ -395,7 +434,13 @@ void Renderer::CreatePipelineState()
     std::cout << "Pipeline state created successfully!" << std::endl;
 }
 
+void Renderer::InitializeModel(Model& model, const std::string& filePath) {
+    // 加载模型数据
+    model.LoadModel(filePath,m_vertices,m_indices);
 
+    model.vertices = m_vertices;
+    model.indices = m_indices;
+}
 
 void Renderer::CreateVertexBuffer(const std::vector<Vertex>& vertices, const std::vector<UINT>& indices)
 {
@@ -620,6 +665,7 @@ void Renderer::Render()
         dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     }
 
+    UpdateLightBuffer();
     // 设置渲染目标视图（RTV）和深度目标视图（DSV）
     m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, m_dsvHeap ? &dsvHandle : nullptr);
 
@@ -677,8 +723,6 @@ void Renderer::Render()
     // 将常量缓冲区绑定到顶点着色器
     m_commandList->SetGraphicsRootConstantBufferView(0, m_cameraBuffer->GetGPUVirtualAddress());
 
-    UpdateLightBuffer();
-
     // Execute the command list (draw the triangle)
     ExecuteCommandList();
 
@@ -731,6 +775,110 @@ void Renderer::UpdateLightBuffer() {
 
     m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
 }
+
+
+/*
+void Renderer::UpdateLightBuffer() {
+
+    // 创建 Shadow Map 的 DSV
+    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapDSVHandle = m_shadowMapDSVHeap->GetCPUDescriptorHandleForHeapStart();
+
+    // 渲染 Shadow Map
+    m_commandList->OMSetRenderTargets(0, nullptr, FALSE, &shadowMapDSVHandle);
+
+
+    LightBuffer lightData;
+    lightData.lightPosition = DirectX::XMFLOAT4(0.0f, 0.0f, 2.0f, 1.0f); // 设置光源位置
+    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f); // 设置环境光颜色
+    lightData.ambientColor = DirectX::XMFLOAT4(0.3f, 0.25f, 0.2f, 1.0f);   // 设置环境光强度
+    lightData.ambientIntensity = 0.6f;
+    lightData.viewPosition = m_camera.GetPosition();   
+    lightData.specularIntensity = 0.3f;    // 镜面反射强度
+    lightData.shininess = 500.0f;  // 高光系数
+
+    // 更新光照常量缓冲区
+    void* pData;
+    HRESULT hr = m_lightBuffer->Map(0, nullptr, &pData);
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to map light buffer.");
+    }
+
+    memcpy(pData, &lightData, sizeof(LightBuffer));
+    m_lightBuffer->Unmap(0, nullptr);
+
+    m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
+
+    // 获取光源的视图矩阵和投影矩阵
+    DirectX::XMMATRIX lightViewMatrix = DirectX::XMMatrixLookAtLH(
+        DirectX::XMLoadFloat4(&lightData.lightPosition), // 光源位置
+        DirectX::XMVectorZero(), // 假设光源朝向场景的原点
+        DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f) // 光源朝上的方向
+    );
+    DirectX::XMMATRIX lightProjectionMatrix = DirectX::XMMatrixOrthographicLH(50.0f, 50.0f, 0.1f, 100.0f);
+
+    // 将光源视图矩阵和投影矩阵传递给着色器
+    LightBuffer shadowLightData;
+    shadowLightData.viewMatrix = lightViewMatrix;
+    shadowLightData.projectionMatrix = lightProjectionMatrix;
+    
+    // 将计算出来的矩阵数据上传到 GPU
+    hr = m_lightBuffer->Map(0, nullptr, &pData);
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to map light buffer.");
+    }
+    memcpy(pData, &shadowLightData, sizeof(LightBuffer));
+    m_lightBuffer->Unmap(0, nullptr);
+
+    // 渲染阴影
+    m_commandList->SetPipelineState(m_pipelineState.Get());
+    DrawSceneToShadowMap();
+
+}
+
+
+void Renderer::DrawSceneToShadowMap()
+{
+    // 设置深度目标
+    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapDSVHandle = m_shadowMapDSVHeap->GetCPUDescriptorHandleForHeapStart();
+    m_commandList->OMSetRenderTargets(0, nullptr, FALSE, &shadowMapDSVHandle);
+
+    // 清除深度缓冲区
+    m_commandList->ClearDepthStencilView(shadowMapDSVHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+    // 设置视口和裁剪矩形
+    D3D12_VIEWPORT viewport = {};
+    viewport.TopLeftX = 0.0f;
+    viewport.TopLeftY = 0.0f;
+    viewport.Width = static_cast<float>(shadowMapWidth);  // 阴影图宽度
+    viewport.Height = static_cast<float>(shadowMapHeight); // 阴影图高度
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
+    m_commandList->RSSetViewports(1, &viewport);
+
+    D3D12_RECT scissorRect = {};
+    scissorRect.left = 0;
+    scissorRect.top = 0;
+    scissorRect.right = shadowMapWidth;
+    scissorRect.bottom = shadowMapHeight;
+    m_commandList->RSSetScissorRects(1, &scissorRect);
+
+    // 设置光源的视图矩阵和投影矩阵
+    LightBuffer shadowLightData;
+    m_lightBuffer->Map(0, nullptr, reinterpret_cast<void**>(&shadowLightData));
+    DirectX::XMMATRIX lightViewMatrix = shadowLightData.viewMatrix;
+    DirectX::XMMATRIX lightProjectionMatrix = shadowLightData.projectionMatrix;
+
+    // 使用光源的视角和投影矩阵绘制场景
+    m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
+
+    // 这里应该是绘制场景中的每一个物体（如模型、地面等）
+    // 你需要设置相应的渲染管线状态和绑定适当的资源
+    for (auto& model : m_sceneModels) {
+        m_commandList->SetGraphicsRootConstantBufferView(0, model->GetModelMatrixBuffer());
+        m_commandList->DrawInstanced(model->GetVertexCount(), 1, 0, 0); // 绘制实例
+    }
+}
+*/
 
 void Renderer::ProcessInput()
 {
