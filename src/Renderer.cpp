@@ -12,7 +12,6 @@
 #include <memory>
 #include <string>
 #include <iostream>
-#include <d3dcompiler.h>
 #include <Windows.h>
 #include <dinput.h>
 
@@ -34,14 +33,13 @@ void Renderer::Initialize(HWND hwnd)
     LoadShaders();
     CreateConstantBuffer();
     CreateLightBuffer();
+    CreateShadowMap();
     CreateRootSignature();
     CreatePipelineState();
     CreateCommandList();
 
-    Model myModel;
-    InitializeModel(myModel, "D:\\Personal Project\\Direct3D12Renderer\\models\\combine.obj");
+    InitializeModel(myModel, "D:\\Personal Project\\Direct3D12Renderer\\models\\suzanne.obj");
     CreateVertexBuffer(m_vertices, m_indices);
-    m_models.push_back(std::move(myModel));
 
 }
 
@@ -252,11 +250,17 @@ void Renderer::CreateShadowMap()
     shadowMapDesc.Height = shadowMapHeight;
     shadowMapDesc.DepthOrArraySize = 1;
     shadowMapDesc.MipLevels = 1;
-    shadowMapDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    shadowMapDesc.Format = DXGI_FORMAT_D32_FLOAT; // 使用无符号深度格式
     shadowMapDesc.SampleDesc.Count = 1;
     shadowMapDesc.SampleDesc.Quality = 0;
     shadowMapDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
     shadowMapDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    // 深度清除值
+    D3D12_CLEAR_VALUE clearValue = {};
+    clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+    clearValue.DepthStencil.Depth = 1.0f;
+    clearValue.DepthStencil.Stencil = 0;
 
     // 创建深度资源
     D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
@@ -265,11 +269,23 @@ void Renderer::CreateShadowMap()
         D3D12_HEAP_FLAG_NONE,
         &shadowMapDesc,
         D3D12_RESOURCE_STATE_DEPTH_WRITE,
-        nullptr, // No clear value
+        &clearValue,
         IID_PPV_ARGS(&m_shadowMap)
     );
     if (FAILED(hr)) {
         throw std::runtime_error("Failed to create shadow map depth resource");
+    }
+
+    // 创建 DSV 描述符堆
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+    dsvHeapDesc.NumDescriptors = 1; // 阴影贴图只有一个 DSV
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // DSV 堆不需要 ShaderVisible标记
+    dsvHeapDesc.NodeMask = 0;
+
+    hr = m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_shadowMapDSVHeap));
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to create DSV heap");
     }
 
     // 创建 DSV（深度视图）
@@ -278,8 +294,56 @@ void Renderer::CreateShadowMap()
     dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     dsvDesc.Texture2D.MipSlice = 0;
     m_device->CreateDepthStencilView(m_shadowMap.Get(), &dsvDesc, m_shadowMapDSVHeap->GetCPUDescriptorHandleForHeapStart());
-}
 
+    // 创建 SRV 描述符堆
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+    srvHeapDesc.NumDescriptors = 1; // 阴影贴图只有一个 SRV
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // 必须设置为可见的
+    srvHeapDesc.NodeMask = 0;
+
+    hr = m_device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_shadowMapSRVHeap));
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to create SRV heap");
+    }
+
+    // 创建阴影贴图的 SRV
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R32_FLOAT; // 对应深度格式
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    m_device->CreateShaderResourceView(m_shadowMap.Get(), &srvDesc, m_shadowMapSRVHeap->GetCPUDescriptorHandleForHeapStart());
+
+    // 创建采样器描述符堆
+    D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = {};
+    samplerHeapDesc.NumDescriptors = 1; // 一个采样器
+    samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+    samplerHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // 必须设置为可见的
+    hr = m_device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&m_samplerHeap));
+    if (FAILED(hr)) {
+        throw std::runtime_error("Failed to create sampler heap");
+    }
+
+    // 定义采样器并存储到描述符堆
+    D3D12_SAMPLER_DESC samplerDesc = {};
+    samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;  // 使用最简单的点过滤
+    samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;  // 边界模式
+    samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    samplerDesc.MipLODBias = 0.0f;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS;
+    samplerDesc.BorderColor[0] = 1.0f;  // 白色边界
+    samplerDesc.BorderColor[1] = 1.0f;
+    samplerDesc.BorderColor[2] = 1.0f;
+    samplerDesc.BorderColor[3] = 1.0f;
+    samplerDesc.MinLOD = 0.0f;
+    samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+
+    m_device->CreateSampler(&samplerDesc, m_samplerHeap->GetCPUDescriptorHandleForHeapStart());
+}
 
 void Renderer::LoadShaders()
 {
@@ -347,11 +411,10 @@ void Renderer::LoadShaders()
 
 }
 
-
 void Renderer::CreateRootSignature()
 {
-    // 定义根参数，绑定常量缓冲区
-    D3D12_ROOT_PARAMETER rootParameters[2] = {};
+    // 定义根参数
+    D3D12_ROOT_PARAMETER rootParameters[4] = {};
 
     // 绑定矩阵常量缓冲区
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -363,7 +426,21 @@ void Renderer::CreateRootSignature()
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[1].Descriptor.ShaderRegister = 1; // 绑定到寄存器 1
     rootParameters[1].Descriptor.RegisterSpace = 0;
-    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    // 绑定阴影贴图（纹理）
+    CD3DX12_DESCRIPTOR_RANGE shadowSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);  // 绑定到 t0
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[2].DescriptorTable.pDescriptorRanges = &shadowSRVRange;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // 绑定阴影贴图的采样器
+    CD3DX12_DESCRIPTOR_RANGE samplerRange(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0); // 绑定到 s0
+    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[3].DescriptorTable.pDescriptorRanges = &samplerRange;
+    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     // 定义根签名描述符
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
@@ -413,7 +490,7 @@ void Renderer::CreatePipelineState()
     psoDesc.DepthStencilState.DepthEnable = TRUE;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-    psoDesc.DepthStencilState.StencilEnable = FALSE; 
+    psoDesc.DepthStencilState.StencilEnable = TRUE; 
 
     // 渲染目标和深度缓冲区格式
     psoDesc.NumRenderTargets = 1;
@@ -645,9 +722,13 @@ void Renderer::ExecuteCommandList()
 void Renderer::Render()
 {
     // 获取当前后台缓冲区索引
-    UINT backBufferIndex = m_swapChain->GetCurrentBackBufferIndex();
+    backBufferIndex = m_swapChain->GetCurrentBackBufferIndex();
 
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+    m_commandList->SetPipelineState(m_pipelineState.Get());
+
+    UpdateLightBuffer();
+    DrawSceneToShadowMap();
 
     // 设置资源屏障，将后台缓冲区从 PRESENT 转换为 RENDER_TARGET
     CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -665,7 +746,6 @@ void Renderer::Render()
         dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     }
 
-    UpdateLightBuffer();
     // 设置渲染目标视图（RTV）和深度目标视图（DSV）
     m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, m_dsvHeap ? &dsvHandle : nullptr);
 
@@ -696,6 +776,7 @@ void Renderer::Render()
 
     // 更新摄像机视图矩阵：处理输入并更新摄像机
     ProcessInput();  // 处理输入来更新相机状态
+
     DirectX::XMMATRIX viewMatrix = m_camera.GetViewMatrix();  // 获取视图矩阵
 
     // 更新投影矩阵（通常不会随相机更新而改变）
@@ -721,7 +802,7 @@ void Renderer::Render()
     }
 
     // 将常量缓冲区绑定到顶点着色器
-    m_commandList->SetGraphicsRootConstantBufferView(0, m_cameraBuffer->GetGPUVirtualAddress());
+    m_commandList->SetGraphicsRootConstantBufferView(0, m_cameraBuffer->GetGPUVirtualAddress());    
 
     // Execute the command list (draw the triangle)
     ExecuteCommandList();
@@ -753,40 +834,8 @@ void Renderer::Render()
     }
 }
 
-void Renderer::UpdateLightBuffer() {
-    LightBuffer lightData;
-    lightData.lightPosition = DirectX::XMFLOAT4(0.0f, 0.0f, 2.0f, 1.0f); // 设置光源位置
-    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f); // 设置环境光颜色
-    lightData.ambientColor = DirectX::XMFLOAT4(0.3f, 0.25f, 0.2f, 1.0f);   // 设置环境光强度
-    lightData.ambientIntensity = 0.6f;
-    lightData.viewPosition = m_camera.GetPosition();   
-    lightData.specularIntensity = 0.3f;    // 镜面反射强度
-    lightData.shininess = 500.0f;  // 高光系数
-
-    // 更新光照常量缓冲区
-    void* pData;
-    HRESULT hr = m_lightBuffer->Map(0, nullptr, &pData);
-    if (FAILED(hr)) {
-        throw std::runtime_error("Failed to map light buffer.");
-    }
-
-    memcpy(pData, &lightData, sizeof(LightBuffer));
-    m_lightBuffer->Unmap(0, nullptr);
-
-    m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
-}
-
-
 /*
 void Renderer::UpdateLightBuffer() {
-
-    // 创建 Shadow Map 的 DSV
-    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapDSVHandle = m_shadowMapDSVHeap->GetCPUDescriptorHandleForHeapStart();
-
-    // 渲染 Shadow Map
-    m_commandList->OMSetRenderTargets(0, nullptr, FALSE, &shadowMapDSVHandle);
-
-
     LightBuffer lightData;
     lightData.lightPosition = DirectX::XMFLOAT4(0.0f, 0.0f, 2.0f, 1.0f); // 设置光源位置
     lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f); // 设置环境光颜色
@@ -807,44 +856,40 @@ void Renderer::UpdateLightBuffer() {
     m_lightBuffer->Unmap(0, nullptr);
 
     m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
+}
+*/
 
-    // 获取光源的视图矩阵和投影矩阵
-    DirectX::XMMATRIX lightViewMatrix = DirectX::XMMatrixLookAtLH(
-        DirectX::XMLoadFloat4(&lightData.lightPosition), // 光源位置
-        DirectX::XMVectorZero(), // 假设光源朝向场景的原点
-        DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f) // 光源朝上的方向
-    );
-    DirectX::XMMATRIX lightProjectionMatrix = DirectX::XMMatrixOrthographicLH(50.0f, 50.0f, 0.1f, 100.0f);
 
-    // 将光源视图矩阵和投影矩阵传递给着色器
-    LightBuffer shadowLightData;
-    shadowLightData.viewMatrix = lightViewMatrix;
-    shadowLightData.projectionMatrix = lightProjectionMatrix;
-    
-    // 将计算出来的矩阵数据上传到 GPU
-    hr = m_lightBuffer->Map(0, nullptr, &pData);
-    if (FAILED(hr)) {
-        throw std::runtime_error("Failed to map light buffer.");
-    }
-    memcpy(pData, &shadowLightData, sizeof(LightBuffer));
+void Renderer::UpdateLightBuffer() {
+
+    LightBuffer lightData;
+    lightData.lightPosition = DirectX::XMFLOAT4(30.0f, 0.0f, 2.0f, 1.0f);
+    lightData.lightColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    lightData.ambientColor = DirectX::XMFLOAT4(0.3f, 0.25f, 0.2f, 1.0f);
+    lightData.ambientIntensity = 0.6f;
+    lightData.viewPosition = m_camera.GetPosition();
+    lightData.specularIntensity = 0.3f;
+    lightData.shininess = 500.0f;
+    DirectX::XMVECTOR _worldLightDir = XMVector3Normalize(XMVectorSet(1.0f, 0.6f, 1.0f, 0.0f));
+    lightData.viewMatrix = DirectX::XMMatrixLookAtRH(5.f * _worldLightDir, XMVectorZero(), XMVectorSet(0.f, 1.0f, 0.f, 0.f));
+    lightData.projectionMatrix = DirectX::XMMatrixOrthographicRH(10.f, 10.f, 0.1f, 10.f);
+
+    // 更新常量缓冲区
+    void* pData;
+    m_lightBuffer->Map(0, nullptr, &pData);
+    memcpy(pData, &lightData, sizeof(LightBuffer));
     m_lightBuffer->Unmap(0, nullptr);
 
-    // 渲染阴影
-    m_commandList->SetPipelineState(m_pipelineState.Get());
-    DrawSceneToShadowMap();
+    std::cout << "Light buffer unmapped and updated." << std::endl;
 
+    m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
+    std::cout << "Light buffer bound to command list at root parameter 1." << std::endl;
 }
-
 
 void Renderer::DrawSceneToShadowMap()
 {
-    // 设置深度目标
-    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapDSVHandle = m_shadowMapDSVHeap->GetCPUDescriptorHandleForHeapStart();
-    m_commandList->OMSetRenderTargets(0, nullptr, FALSE, &shadowMapDSVHandle);
-
-    // 清除深度缓冲区
-    m_commandList->ClearDepthStencilView(shadowMapDSVHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
+    std::cout << "Entering DrawSceneToShadowMap" << std::endl;
+    
     // 设置视口和裁剪矩形
     D3D12_VIEWPORT viewport = {};
     viewport.TopLeftX = 0.0f;
@@ -862,23 +907,44 @@ void Renderer::DrawSceneToShadowMap()
     scissorRect.bottom = shadowMapHeight;
     m_commandList->RSSetScissorRects(1, &scissorRect);
 
-    // 设置光源的视图矩阵和投影矩阵
-    LightBuffer shadowLightData;
-    m_lightBuffer->Map(0, nullptr, reinterpret_cast<void**>(&shadowLightData));
-    DirectX::XMMATRIX lightViewMatrix = shadowLightData.viewMatrix;
-    DirectX::XMMATRIX lightProjectionMatrix = shadowLightData.projectionMatrix;
+    // 切换 shadow map 到 DepthWrite 状态
+    if (m_shadowMap) {
+        CD3DX12_RESOURCE_BARRIER shadowBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_shadowMap.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        m_commandList->ResourceBarrier(1, &shadowBarrier);
+    }
 
-    // 使用光源的视角和投影矩阵绘制场景
+    // 获取并清空深度目标视图（DSV）
+    D3D12_CPU_DESCRIPTOR_HANDLE DSVHandle = m_shadowMapDSVHeap->GetCPUDescriptorHandleForHeapStart();
+    m_commandList->ClearDepthStencilView(DSVHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+
+    // 设置深度目标视图（DSV）
+    m_commandList->OMSetRenderTargets(0, nullptr, false, &DSVHandle);
+
+    ID3D12DescriptorHeap* descriptorHeaps[] = { m_shadowMapSRVHeap.Get(), m_samplerHeap.Get()};
+    m_commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+
+    m_commandList->SetGraphicsRootConstantBufferView(0, m_cameraBuffer->GetGPUVirtualAddress());   
     m_commandList->SetGraphicsRootConstantBufferView(1, m_lightBuffer->GetGPUVirtualAddress());
+    m_commandList->SetGraphicsRootDescriptorTable(2, m_shadowMapSRVHeap->GetGPUDescriptorHandleForHeapStart());
+    m_commandList->SetGraphicsRootDescriptorTable(3, m_samplerHeap->GetGPUDescriptorHandleForHeapStart());
 
-    // 这里应该是绘制场景中的每一个物体（如模型、地面等）
-    // 你需要设置相应的渲染管线状态和绑定适当的资源
-    for (auto& model : m_sceneModels) {
-        m_commandList->SetGraphicsRootConstantBufferView(0, model->GetModelMatrixBuffer());
-        m_commandList->DrawInstanced(model->GetVertexCount(), 1, 0, 0); // 绘制实例
+    // 绘制阴影
+    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_commandList->DrawIndexedInstanced(static_cast<UINT>(myModel.indices.size()), 1, 0, 0, 0);
+
+    // 绘制 shadow map 完成后，切换回像素着色器资源状态
+    if (m_shadowMap) {
+        CD3DX12_RESOURCE_BARRIER shadowBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_shadowMap.Get(),
+            D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        m_commandList->ResourceBarrier(1, &shadowBarrier);
+
+        std::cout << "Shadow map resource barrier: Depth Write to Pixel Shader." << std::endl;
     }
 }
-*/
+
 
 void Renderer::ProcessInput()
 {

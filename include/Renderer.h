@@ -27,21 +27,23 @@ public:
         DirectX::XMMATRIX projectionMatrix;
     };
 
-    struct LightBuffer {
-        DirectX::XMFLOAT4 lightPosition;  // 光源位置
-        DirectX::XMFLOAT4 lightColor;     // 光源颜色
-        DirectX::XMFLOAT4 ambientColor;
-        float ambientIntensity; 
-        DirectX::XMFLOAT3 viewPosition;    // 摄像机位置
-        float shininess;                   // 高光系数
-        float specularIntensity;
+    struct alignas(16) LightBuffer {
+        DirectX::XMFLOAT4 lightPosition;     // 光源位置 (16 bytes)
+        DirectX::XMFLOAT4 lightColor;        // 光源颜色 (16 bytes)
+        DirectX::XMFLOAT4 ambientColor;      // 环境光颜色 (16 bytes)
 
-        // 光源的视角矩阵和投影矩阵，用于阴影映射
-        DirectX::XMMATRIX viewMatrix;  // 光源视角矩阵
-        DirectX::XMMATRIX projectionMatrix; // 光源投影矩阵
+        float ambientIntensity;             // 环境光强度 (4 bytes)
+        float shininess;                    // 高光系数 (4 bytes)
+        float specularIntensity;            // 高光强度 (4 bytes)
 
-        float padding;                     // 用于对齐 16 字节
+        DirectX::XMFLOAT3 viewPosition;     // 摄像机位置 (12 bytes)
+
+        DirectX::XMMATRIX viewMatrix;       // 光源视角矩阵 (64 bytes)
+        DirectX::XMMATRIX projectionMatrix; // 光源投影矩阵 (64 bytes)
+        DirectX::XMFLOAT4 padding2;  
+        DirectX::XMFLOAT4 padding3;  
     };
+
 
     std::vector<Vertex> m_vertices;  // 或其他类型
     std::vector<UINT> m_indices;
@@ -71,11 +73,13 @@ public:
 
 private:
     Camera m_camera;
+    Model myModel;
     UINT m_width = 800;  // 窗口宽度
     UINT m_height = 600; // 窗口高度
     UINT m_swapChainBufferCount = 2; // 默认使用双缓冲
     UINT shadowMapWidth = 800;
     UINT shadowMapHeight = 600;
+    UINT backBufferIndex;
 
     void ProcessInput();
     void CreateDevice();
@@ -84,7 +88,7 @@ private:
 
     void ReleaseResources(); // Clean up resources when no longer needed
     void UpdateLightBuffer();
-    //void DrawSceneToShadowMap();
+    void DrawSceneToShadowMap();
 
     HRESULT hr;
 
@@ -104,6 +108,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencilBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_shadowMap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_shadowMapDSVHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_shadowMapSRVHeap; 
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap;
     uint64_t m_fenceValue = 1;
     std::vector<Model> m_models; 
 
