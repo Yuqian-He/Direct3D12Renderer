@@ -50,9 +50,10 @@ Develop a real-time global illumination rendering engine capable of computing in
 - ✅ Implement Root Signature and PSO.  
 - ✅ Add camera movement.
 - ✅ Load simple models.  
-- [ ] Implement dynamic lighting and shadow mapping.  
+- ❌ Implement dynamic lighting and shadow mapping.  
+<sub><sup>After reconstructing my code, I still couldn’t get it to work properly. So, I’ve decided to start reading and practicing with the book ["Introduce to 3D Game Programming with DirectX12"](https://www.google.co.uk/books/edition/Introduction_to_3D_Game_Programming_with/gj6TDgAAQBAJ?hl=en&gbpv=0). I’m also actively updating my code and notes in my repository [D3D12book_code](https://github.com/Yuqian-He/D3D12book_code). I’ll continue sharing updates once I feel more confident in my understanding. 😊
 
-**Timeframe:** 2024-11-30 to 2024-12-29  
+**Timeframe:** 2024-11-30 to  
 
 ---
 
@@ -64,7 +65,7 @@ Develop a real-time global illumination rendering engine capable of computing in
 - [ ] Add SSR using depth buffer ray tracing.  
 - [ ] Optimize post-processing performance.  
 
-**Timeframe:** 2024-12-30 to 2025-01-20  
+**Timeframe:** xxx to xxx  
 
 ---
 
@@ -77,7 +78,7 @@ Develop a real-time global illumination rendering engine capable of computing in
 - [ ] Optimize memory usage and resource management.  
 
 
-**Timeframe:** 2025-01-21 to 2024-02-09  
+**Timeframe:** xxx to xxx  
 
 ---
 
@@ -89,6 +90,6 @@ Develop a real-time global illumination rendering engine capable of computing in
 - [ ] Implement volumetric lighting for atmospheric effects.  
 - [ ] Create a demo showcasing all features.  
 
-**Timeframe:** 2025-02-09 to 2025-02-28  
+**Timeframe:** xxx to xxx  
 
 
