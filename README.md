@@ -51,9 +51,9 @@ Develop a real-time global illumination rendering engine capable of computing in
 - ✅ Add camera movement.
 - ✅ Load simple models.  
 - ❌ Implement dynamic lighting and shadow mapping.  
-<sub>After reconstructing my code, I still couldn’t get it to work properly. So, I’ve decided to start reading and practicing with the book ["Introduce to 3D Game Programming with DirectX12"](https://www.google.co.uk/books/edition/Introduction_to_3D_Game_Programming_with/gj6TDgAAQBAJ?hl=en&gbpv=0). I’m also actively updating my code and notes in my repository [D3D12book_code](https://github.com/Yuqian-He/D3D12book_code). I’ll continue sharing updates once I feel more confident in my understanding. 😊
+<sub><span style="color:gray;">After reconstructing my code, I still couldn’t get it to work properly. So, I’ve decided to start reading and practicing with the book ["Introduce to 3D Game Programming with DirectX12"](https://www.google.co.uk/books/edition/Introduction_to_3D_Game_Programming_with/gj6TDgAAQBAJ?hl=en&gbpv=0). I’m also actively updating my code and notes in my repository [D3D12book_code](https://github.com/Yuqian-He/D3D12book_code). I’ll continue sharing updates once I feel more confident in my understanding. 😊
 
-**Timeframe:** 2024-11-30 to  
+**Timeframe:** 2024-11-30 to  xxx
 
 ---
 
