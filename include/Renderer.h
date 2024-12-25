@@ -15,6 +15,15 @@
 #include <stdexcept>
 #include <iostream>
 #include <d3dcompiler.h>
+#include "pipeline.h"
+
+// 定义一个通用的对齐宏（256 字节对齐）
+constexpr UINT ALIGNMENT = 256;
+
+template<typename T>
+constexpr UINT AlignTo256() {
+    return (sizeof(T) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+}
 
 class Renderer {
 public:
@@ -27,21 +36,17 @@ public:
         DirectX::XMMATRIX projectionMatrix;
     };
 
-    struct alignas(16) LightBuffer {
+    struct alignas(ALIGNMENT) LightBuffer {
         DirectX::XMFLOAT4 lightPosition;     // 光源位置 (16 bytes)
         DirectX::XMFLOAT4 lightColor;        // 光源颜色 (16 bytes)
         DirectX::XMFLOAT4 ambientColor;      // 环境光颜色 (16 bytes)
-
         float ambientIntensity;             // 环境光强度 (4 bytes)
         float shininess;                    // 高光系数 (4 bytes)
         float specularIntensity;            // 高光强度 (4 bytes)
-
         DirectX::XMFLOAT3 viewPosition;     // 摄像机位置 (12 bytes)
-
         DirectX::XMMATRIX viewMatrix;       // 光源视角矩阵 (64 bytes)
         DirectX::XMMATRIX projectionMatrix; // 光源投影矩阵 (64 bytes)
-        DirectX::XMFLOAT4 padding2;  
-        DirectX::XMFLOAT4 padding3;  
+        float padding2[2];                  // 对齐用
     };
 
 
@@ -58,8 +63,6 @@ public:
     // 使这些函数可以在外部调用
     void LoadShaders();
     void CreateDescriptorHeaps();
-    void CreateRootSignature();
-    void CreatePipelineState();
     void CreateVertexBuffer(const std::vector<Vertex>& vertices, const std::vector<UINT>& indices);
     void CreateCommandList();
     void ExecuteCommandList();
@@ -70,6 +73,10 @@ public:
     void CreateDepthStencilBuffer();
     void CreateShadowMap();
     void InitializeModel(Model& model, const std::string& filePath);
+    void InitializePipeline();
+    void CreateRenderTargetView();
+    D3D12_CPU_DESCRIPTOR_HANDLE CurrentBackBufferView() const;
+    D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView() const;
 
 private:
     Camera m_camera;
@@ -80,18 +87,28 @@ private:
     UINT shadowMapWidth = 800;
     UINT shadowMapHeight = 600;
     UINT backBufferIndex;
+    UINT mRtvDescriptorSize = 0;     // RTV 描述符大小
+    UINT mDsvDescriptorSize = 0;     // DSV 描述符大小
+    UINT mCbvSrvDescriptorSize = 0;  // CBV/SRV/UAV 描述符大小
+    int mCurrBackBuffer = 0;
 
     void ProcessInput();
     void CreateDevice();
     void CreateCommandQueue();
     void CreateSwapChain(HWND hwnd);
-
     void ReleaseResources(); // Clean up resources when no longer needed
     void UpdateLightBuffer();
     void DrawSceneToShadowMap();
+    void RenderShadowMap();
+    void DrawScene();
+    void RenderGeometryPass();
+    void RenderLightingPass();
+    void RenderPostProcessing();
+    void PresentFrame();
+    void SetViewportAndScissor(UINT width, UINT height);
 
     HRESULT hr;
-
+    Microsoft::WRL::ComPtr<IDXGIFactory4> mdxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapChain;
@@ -99,8 +116,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_commandList;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_vertexShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_pixelShader;
     Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_cameraBuffer;
@@ -112,6 +127,29 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap;
     uint64_t m_fenceValue = 1;
     std::vector<Model> m_models; 
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_gBufferTextures; // 存储 G-buffer 资源
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_gBufferRTVs;                // 存储 G-buffer 的 RTV 句柄
+    std::vector<const float*> clearColors;  
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_shadowPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_shadowRootSignature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_geometryPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_geometryRootSignature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_lightingPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_lightingRootSignature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_postProcessingPipelineState;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_postProcessingRootSignature;
+    std::unique_ptr<Pipeline> m_pipeline;
+
+    //shaders
+    Microsoft::WRL::ComPtr<ID3DBlob> m_shadowVertexShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> m_shadowPixelShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> m_geometryVertexShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> m_geometryPixelShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> m_lightingVertexShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> m_lightingPixelShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> m_postProcessingVertexShader;
+    Microsoft::WRL::ComPtr<ID3DBlob> m_postProcessingPixelShader;
 
     static const UINT FRAME_COUNT = 2; // 假设交换链有两个后台缓冲区
     Microsoft::WRL::ComPtr<ID3D12Resource> m_renderTargets[FRAME_COUNT]; // 后台缓冲区数组

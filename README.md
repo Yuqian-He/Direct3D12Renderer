@@ -52,7 +52,7 @@ Develop a real-time global illumination rendering engine capable of computing in
 - ✅ Load simple models.  
 - [ ] Implement dynamic lighting and shadow mapping.  
 
-**Timeframe:** 2024-11-30 to 2024-12-14  
+**Timeframe:** 2024-11-30 to 2024-12-29  
 
 ---
 
@@ -64,7 +64,7 @@ Develop a real-time global illumination rendering engine capable of computing in
 - [ ] Add SSR using depth buffer ray tracing.  
 - [ ] Optimize post-processing performance.  
 
-**Timeframe:** 2024-12-15 to 2024-12-29  
+**Timeframe:** 2024-12-30 to 2025-01-20  
 
 ---
 
@@ -77,7 +77,7 @@ Develop a real-time global illumination rendering engine capable of computing in
 - [ ] Optimize memory usage and resource management.  
 
 
-**Timeframe:** 2024-12-30 to 2024-01-13  
+**Timeframe:** 2025-01-21 to 2024-02-09  
 
 ---
 
@@ -89,6 +89,6 @@ Develop a real-time global illumination rendering engine capable of computing in
 - [ ] Implement volumetric lighting for atmospheric effects.  
 - [ ] Create a demo showcasing all features.  
 
-**Timeframe:** 2024-01-14 to 2024-01-28  
+**Timeframe:** 2025-02-09 to 2025-02-28  
 
 
