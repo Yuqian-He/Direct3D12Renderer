@@ -20,10 +20,13 @@ file(GLOB SHADERS ${CMAKE_SOURCE_DIR}/include/*.h)
 
 # 添加可执行文件
 add_definitions(-DUNICODE -D_UNICODE)
-add_executable(Direct3D12Renderer WIN32 src/main.cpp src/Renderer.cpp src/ModelLoader.cpp src/Camera.cpp src/Model.cpp src/Pipeline.cpp src/ShaderCompiler.cpp)
+add_executable(Direct3D12Renderer WIN32 src/main.cpp src/Renderer.cpp 
+                                        src/Camera.cpp src/Pipeline.cpp 
+                                        src/ShaderCompiler.cpp src/d3dUtil.cpp 
+                                        src/MathHelper.cpp src/Pipeline.cpp)
 
 # 使用 vcpkg 安装的库
 find_package(tinyobjloader CONFIG REQUIRED)
 
-target_link_libraries(Direct3D12Renderer d3d12 dxgi d3dcompiler)
+target_link_libraries(Direct3D12Renderer d3d12 dxgi d3dcompiler dxguid)
 target_link_libraries(Direct3D12Renderer tinyobjloader::tinyobjloader)

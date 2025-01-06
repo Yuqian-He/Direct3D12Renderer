@@ -64,6 +64,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         }
 
         // 每一帧渲染
+        renderer.Update();
         renderer.Render();
     }
 
