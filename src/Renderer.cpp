@@ -269,8 +269,7 @@ void Renderer::SetViewportAndScissor(UINT width, UINT height) {
 void Renderer::InitialObject()
 {
     ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), nullptr));
-    BuildDescriptorHeaps();
-    BuildConstantBuffers();
+    mObjectCB = std::make_unique<UploadBuffer<ObjectConstants>>(m_device.Get(), 1, true);
     BuildRootSignature();
     BuildShadersAndInputLayout();
     BuildGeometry();
@@ -422,6 +421,7 @@ void Renderer::Update()
 
     // 计算世界、视图和投影矩阵的组合
     XMMATRIX worldViewProj = world * view * proj;
+    
 
     // 传递常量到着色器
     ObjectConstants objConstants;
@@ -446,14 +446,12 @@ void Renderer::Render()
     m_commandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
     m_commandList->OMSetRenderTargets(1, &CurrentBackBufferView(), TRUE, &DepthStencilView()); //RTV
-    ID3D12DescriptorHeap* descriptorHeaps[] = { mCbvHeap.Get() };
-    m_commandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps); //CBV
     m_commandList->SetGraphicsRootSignature(m_geometryRootSignature.Get()); //RootSignature
-
     m_commandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexBufferView());
     m_commandList->IASetIndexBuffer(&mBoxGeo->IndexBufferView());
     m_commandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_commandList->SetGraphicsRootDescriptorTable(0, mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+    auto objCBAddress = mObjectCB->Resource()->GetGPUVirtualAddress();
+    m_commandList->SetGraphicsRootConstantBufferView(0, objCBAddress);
     m_commandList->DrawIndexedInstanced(mBoxGeo->DrawArgs["box"].IndexCount, 1, 0, 0, 0);
 
     m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
