@@ -13,14 +13,10 @@
 #include "UploadBuffer.h"
 #include "Camera.h"
 #include "Pipeline.h"
+#include "Vertex.h"
 
 struct ObjectConstants{
     DirectX::XMFLOAT4X4 WorldViewProj = MathHelper::Identity4x4();
-};
-
-struct Vertex{
-    DirectX::XMFLOAT3 Pos;
-    DirectX::XMFLOAT4 Color;
 };
 
 class Renderer {
@@ -72,6 +68,8 @@ private:
     bool m4xMsaaState = false; 
     UINT m4xMsaaQuality = 0;  
     static const UINT SwapChainBufferCount = 2; 
+    std::vector<Vertex> m_vertices;
+    std::vector<UINT> m_indices;
     HRESULT hr;
     Microsoft::WRL::ComPtr<IDXGIFactory4> mdxgiFactory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
@@ -113,7 +111,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_geometryRootSignature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_geometryPipelineState;
     std::vector<D3D12_INPUT_ELEMENT_DESC> m_GeometryInputLayout;
-    std::unique_ptr<MeshGeometry> mBoxGeo = nullptr;
+    std::unique_ptr<MeshGeometry> mImportGeo = nullptr;
     void InitialObject();
     void BuildDescriptorHeaps();
     void BuildConstantBuffers();

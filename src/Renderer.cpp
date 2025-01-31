@@ -4,10 +4,10 @@
 #include "d3dUtil.h"
 #include <initguid.h>
 #include "Camera.h"
-/*
-#include "Renderer.h"
 #include "Vertex.h"
 #include "ModelLoader.h"
+/*
+#include "Renderer.h"
 #include "Model.h"
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -329,75 +329,42 @@ void Renderer::BuildShadersAndInputLayout()
 
 void Renderer::BuildGeometry(){
 
-    std::array<Vertex, 8> vertices =
-    {
-        Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green) }),
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) })
-    };
+    std::string modelPath = "D:\\Personal Project\\Direct3D12Renderer\\models\\suzanne.obj";
+    if (!ModelLoader::LoadOBJ(modelPath, m_vertices, m_indices)) {
+        std::cerr << "Failed to load model: " << modelPath << std::endl;
+        return;
+    }
 
-	std::array<std::uint16_t, 36> indices =
-	{
-		// front face
-		0, 1, 2,
-		0, 2, 3,
+    const UINT vbByteSize = static_cast<UINT>(m_vertices.size() * sizeof(Vertex));
+    const UINT ibByteSize = static_cast<UINT>(m_indices.size() * sizeof(UINT));
 
-		// back face
-		4, 6, 5,
-		4, 7, 6,
+    mImportGeo = std::make_unique<MeshGeometry>();
+    mImportGeo->Name = "ImportGeo";
 
-		// left face
-		4, 5, 1,
-		4, 1, 0,
+    ThrowIfFailed(D3DCreateBlob(vbByteSize, &mImportGeo->VertexBufferCPU)); //创建一个大小为 vbByteSize 的内存块用于存储顶点数据
+    CopyMemory(mImportGeo->VertexBufferCPU->GetBufferPointer(), m_vertices.data(), vbByteSize); //将 vertices 中的顶点数据拷贝到 VertexBufferCPU 中
 
-		// right face
-		3, 2, 6,
-		3, 6, 7,
+    ThrowIfFailed(D3DCreateBlob(ibByteSize, &mImportGeo->IndexBufferCPU));
+    CopyMemory(mImportGeo->IndexBufferCPU->GetBufferPointer(), m_indices.data(), ibByteSize);
 
-		// top face
-		1, 5, 6,
-		1, 6, 2,
+	mImportGeo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(m_device.Get(),
+		m_commandList.Get(), m_vertices.data(), vbByteSize, mImportGeo->VertexBufferUploader); //创建 GPU 顶点缓冲区 将顶点数据从 CPU 上传到 GPU 的默认缓冲区中
 
-		// bottom face
-		4, 0, 3,
-		4, 3, 7
-	};
-
-    const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
-    const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
-
-    mBoxGeo = std::make_unique<MeshGeometry>();
-    mBoxGeo->Name = "boxGeo";
-
-    ThrowIfFailed(D3DCreateBlob(vbByteSize, &mBoxGeo->VertexBufferCPU)); //创建一个大小为 vbByteSize 的内存块用于存储顶点数据
-    CopyMemory(mBoxGeo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize); //将 vertices 中的顶点数据拷贝到 VertexBufferCPU 中
-
-    ThrowIfFailed(D3DCreateBlob(ibByteSize, &mBoxGeo->IndexBufferCPU));
-    CopyMemory(mBoxGeo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-
-	mBoxGeo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(m_device.Get(),
-		m_commandList.Get(), vertices.data(), vbByteSize, mBoxGeo->VertexBufferUploader); //创建 GPU 顶点缓冲区 将顶点数据从 CPU 上传到 GPU 的默认缓冲区中
-
-	mBoxGeo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(m_device.Get(),
-		m_commandList.Get(), indices.data(), ibByteSize, mBoxGeo->IndexBufferUploader); //创建 GPU 顶点缓冲区 将索引数据从 CPU 上传到 GPU 的默认缓冲区中
+	mImportGeo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(m_device.Get(),
+		m_commandList.Get(), m_indices.data(), ibByteSize, mImportGeo->IndexBufferUploader); //创建 GPU 顶点缓冲区 将索引数据从 CPU 上传到 GPU 的默认缓冲区中
 
     // 设置缓冲区属性
-	mBoxGeo->VertexByteStride = sizeof(Vertex);
-	mBoxGeo->VertexBufferByteSize = vbByteSize;
-	mBoxGeo->IndexFormat = DXGI_FORMAT_R16_UINT;
-	mBoxGeo->IndexBufferByteSize = ibByteSize;
+	mImportGeo->VertexByteStride = sizeof(Vertex);
+	mImportGeo->VertexBufferByteSize = vbByteSize;
+    mImportGeo->IndexFormat = DXGI_FORMAT_R32_UINT;
+	mImportGeo->IndexBufferByteSize = ibByteSize;
 
 	SubmeshGeometry submesh;
-	submesh.IndexCount = (UINT)indices.size();
+	submesh.IndexCount = (UINT)m_indices.size();
 	submesh.StartIndexLocation = 0;
 	submesh.BaseVertexLocation = 0;
 
-	mBoxGeo->DrawArgs["box"] = submesh;
+	mImportGeo->DrawArgs["importGeo"] = submesh;
 
 }
 
@@ -447,12 +414,12 @@ void Renderer::Render()
 
     m_commandList->OMSetRenderTargets(1, &CurrentBackBufferView(), TRUE, &DepthStencilView()); //RTV
     m_commandList->SetGraphicsRootSignature(m_geometryRootSignature.Get()); //RootSignature
-    m_commandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexBufferView());
-    m_commandList->IASetIndexBuffer(&mBoxGeo->IndexBufferView());
-    m_commandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    m_commandList->IASetVertexBuffers(0, 1, &mImportGeo->VertexBufferView());
+    m_commandList->IASetIndexBuffer(&mImportGeo->IndexBufferView());
+    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     auto objCBAddress = mObjectCB->Resource()->GetGPUVirtualAddress();
     m_commandList->SetGraphicsRootConstantBufferView(0, objCBAddress);
-    m_commandList->DrawIndexedInstanced(mBoxGeo->DrawArgs["box"].IndexCount, 1, 0, 0, 0);
+    m_commandList->DrawIndexedInstanced(mImportGeo->DrawArgs["importGeo"].IndexCount, 1, 0, 0, 0);
 
     m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
         CurrentBackBuffer(),

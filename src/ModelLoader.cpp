@@ -3,10 +3,6 @@
 #include <iostream>
 #include <Windows.h>
 #include <unordered_map> // 引入 unordered_map
-#include <string>        // 用于 std::string
-#include <vector>        // 用于 std::vector
-#include <windows.h>     // 如果 UINT 来自 Windows SDK
-#include "Vertex.h"      // 包含 Vertex 的定义
 
 bool ModelLoader::LoadOBJ(const std::string& filepath, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices) {
     tinyobj::attrib_t attrib;
@@ -14,7 +10,6 @@ bool ModelLoader::LoadOBJ(const std::string& filepath, std::vector<Vertex>& vert
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    // Load the OBJ file
     bool success = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str());
 
     if (!warn.empty()) {
@@ -28,19 +23,42 @@ bool ModelLoader::LoadOBJ(const std::string& filepath, std::vector<Vertex>& vert
         return false;
     }
 
-    // Process shapes
+    // 使用完整的索引 (vertex_index, normal_index, texcoord_index) 作为唯一 Key
+    struct VertexKey {
+        int vertexIndex;
+        int normalIndex;
+        int texcoordIndex;
+
+        bool operator==(const VertexKey& other) const {
+            return vertexIndex == other.vertexIndex &&
+                   normalIndex == other.normalIndex &&
+                   texcoordIndex == other.texcoordIndex;
+        }
+    };
+
+    struct KeyHasher {
+        std::size_t operator()(const VertexKey& k) const {
+            return ((std::hash<int>()(k.vertexIndex) ^
+                    (std::hash<int>()(k.normalIndex) << 1)) >> 1) ^
+                    (std::hash<int>()(k.texcoordIndex) << 1);
+        }
+    };
+
+    std::unordered_map<VertexKey, uint32_t, KeyHasher> uniqueVertexMap; 
+
+    // 遍历所有形状
     for (const auto& shape : shapes) {
         for (const auto& index : shape.mesh.indices) {
             Vertex vertex = {};
 
-            // Load position
+            // 读取顶点坐标
             vertex.Position = {
                 attrib.vertices[3 * index.vertex_index + 0],
                 attrib.vertices[3 * index.vertex_index + 1],
                 attrib.vertices[3 * index.vertex_index + 2]
             };
 
-            // Load normals if available
+            // 读取法线
             if (index.normal_index >= 0) {
                 vertex.Normal = {
                     attrib.normals[3 * index.normal_index + 0],
@@ -48,25 +66,33 @@ bool ModelLoader::LoadOBJ(const std::string& filepath, std::vector<Vertex>& vert
                     attrib.normals[3 * index.normal_index + 2]
                 };
             } else {
-                vertex.Normal = { 0.0f, 0.0f, 0.0f }; // Default normal if none provided
+                vertex.Normal = { 0.0f, 0.0f, 0.0f };
             }
 
-            // Load texture coordinates if available
+            // 读取纹理坐标
             if (index.texcoord_index >= 0) {
                 vertex.TexCoord = {
                     attrib.texcoords[2 * index.texcoord_index + 0],
-                    attrib.texcoords[2 * index.texcoord_index + 1]
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1] // OpenGL -> DirectX 需要反转 V 轴
                 };
             } else {
-                vertex.TexCoord = { 0.0f, 0.0f }; // Default UV if none provided
+                vertex.TexCoord = { 0.0f, 0.0f };
             }
 
-            vertices.push_back(vertex);
-            indices.push_back(static_cast<uint32_t>(indices.size()));
+            // 构造唯一 Key
+            VertexKey key = { index.vertex_index, index.normal_index, index.texcoord_index };
+
+            // 如果这个顶点组合没有存储，则存入
+            if (uniqueVertexMap.count(key) == 0) {
+                uniqueVertexMap[key] = static_cast<uint32_t>(vertices.size());
+                vertices.push_back(vertex);
+            }
+
+            // 添加索引
+            indices.push_back(uniqueVertexMap[key]);
         }
     }
 
     std::cout << "Successfully loaded model: " << filepath << std::endl;
     return true;
 }
-
