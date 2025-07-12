@@ -24,7 +24,7 @@ add_executable(Direct3D12Renderer WIN32 src/main.cpp src/Renderer.cpp
                                         src/Camera.cpp src/Pipeline.cpp 
                                         src/ShaderCompiler.cpp src/d3dUtil.cpp 
                                         src/MathHelper.cpp src/Pipeline.cpp
-                                        src/ModelLoader.cpp)
+                                        src/ModelLoader.cpp src/FrameResource.cpp)
 
 # 使用 vcpkg 安装的库
 find_package(tinyobjloader CONFIG REQUIRED)

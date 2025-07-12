@@ -14,33 +14,26 @@
 #include "Camera.h"
 #include "Pipeline.h"
 #include "Vertex.h"
+#include "FrameResource.h"
 
-struct ObjectConstants{
-    DirectX::XMFLOAT4X4 WorldViewProj = MathHelper::Identity4x4();
+struct RenderItem
+{
+	RenderItem() = default;
+
+    DirectX::XMFLOAT4X4 World = MathHelper::Identity4x4(); //该几何体的世界矩阵
+    DirectX::XMFLOAT4X4 TexTransform = MathHelper::Identity4x4();
+	UINT ObjCBIndex = -1; //该几何体的常量数据在objConstantBuffer中的索引
+	MeshGeometry* Geo = nullptr;
+    Material* Mat = nullptr;
+    D3D12_PRIMITIVE_TOPOLOGY PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    UINT IndexCount = 0;
+    UINT StartIndexLocation = 0;
+    int BaseVertexLocation = 0;
+    int NumFramesDirty = gNumFrameResources;
 };
 
 class Renderer {
 public:
-/*
-    struct CameraBuffer {
-        DirectX::XMMATRIX worldMatrix;
-        DirectX::XMMATRIX viewMatrix;
-        DirectX::XMMATRIX projectionMatrix;
-    };
-
-    struct alignas(ALIGNMENT) LightBuffer {
-        DirectX::XMFLOAT4 lightPosition;     // 光源位置 (16 bytes)
-        DirectX::XMFLOAT4 lightColor;        // 光源颜色 (16 bytes)
-        DirectX::XMFLOAT4 ambientColor;      // 环境光颜色 (16 bytes)
-        float ambientIntensity;             // 环境光强度 (4 bytes)
-        float shininess;                    // 高光系数 (4 bytes)
-        float specularIntensity;            // 高光强度 (4 bytes)
-        DirectX::XMFLOAT3 viewPosition;     // 摄像机位置 (12 bytes)
-        DirectX::XMMATRIX viewMatrix;       // 光源视角矩阵 (64 bytes)
-        DirectX::XMMATRIX projectionMatrix; // 光源投影矩阵 (64 bytes)
-        float padding2[2];                  // 对齐用
-    };
-*/
 
     Renderer();
     ~Renderer();
@@ -68,6 +61,13 @@ private:
     bool m4xMsaaState = false; 
     UINT m4xMsaaQuality = 0;  
     static const UINT SwapChainBufferCount = 2; 
+
+    //3缓冲
+    std::vector<std::unique_ptr<FrameResource>> mFrameResources;
+    FrameResource* mCurrFrameResource = nullptr;
+    int mCurrFrameResourceIndex = 0;
+    void BuildFrameResources();
+
     std::vector<Vertex> m_vertices;
     std::vector<UINT> m_indices;
     HRESULT hr;
@@ -92,6 +92,13 @@ private:
     void CreateDepthStencilBuffer();
     void SetViewportAndScissor(UINT width, UINT height);
     void FlushCommandQueue();
+    void BuildMaterials();
+    void OnKeyboardInput();
+    void UpdateCamera();
+    void UpdateMainPassCB();
+    void UpdateObjectCBs();
+    void UpdateMaterialCB();
+    void BuildRenderItem();
 
     //相机的参数
     Camera m_camera;
@@ -100,6 +107,12 @@ private:
     DirectX::XMFLOAT4X4 mProj = MathHelper::Identity4x4();
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mCbvHeap = nullptr;
     std::unique_ptr<UploadBuffer<ObjectConstants>> mObjectCB = nullptr;
+    std::unique_ptr<UploadBuffer<PassConstants>> passCB = nullptr;
+    std::vector<std::unique_ptr<RenderItem>> mAllRitems;
+    std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
+    std::unordered_map<std::string,  Microsoft::WRL::ComPtr<ID3DBlob>> mShaders;
+    std::unique_ptr<MeshGeometry> geo = nullptr;
+    std::vector<RenderItem*> mOpaqueRitems;
     void ProcessInput();
 
     //shader参数
@@ -119,62 +132,11 @@ private:
     void BuildShadersAndInputLayout();
     void BuildGeometry();
     void BuildPSO();
+    void DrawRenderItems(ID3D12GraphicsCommandList* m_commandList,const std::vector<RenderItem*>& ritems);
 
+    //太阳（平行光）位置的球坐标
+    float sunTheta = 1.25f * DirectX::XM_PI;
+    float sunPhi = DirectX::XM_PIDIV4;
 
-
-
-
-
-/*
-    Model myModel;
-    UINT shadowMapWidth = 800;
-    UINT shadowMapHeight = 600;
-    UINT backBufferIndex;
-    void ReleaseResources(); // Clean up resources when no longer needed
-    void UpdateLightBuffer();
-    void DrawSceneToShadowMap();
-    void RenderShadowMap();
-    void DrawScene();
-    void RenderGeometryPass();
-    void RenderLightingPass();
-    void RenderPostProcessing();
-    void PresentFrame();
-    
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencilBuffer;
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_shadowMap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_shadowMapDSVHeap;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_shadowMapSRVHeap; 
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap;
-    uint64_t m_fenceValue = 1;
-    std::vector<Model> m_models; 
-    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_gBufferTextures; // 存储 G-buffer 资源
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_gBufferRTVs;                // 存储 G-buffer 的 RTV 句柄
-    std::vector<const float*> clearColors;  
-
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_shadowPipelineState;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_shadowRootSignature;
-    
-    
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_lightingPipelineState;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_lightingRootSignature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_postProcessingPipelineState;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_postProcessingRootSignature;
-    
-
-    //shaders
-    Microsoft::WRL::ComPtr<ID3DBlob> m_shadowVertexShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_shadowPixelShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_geometryVertexShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_geometryPixelShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_lightingVertexShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_lightingPixelShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_postProcessingVertexShader;
-    Microsoft::WRL::ComPtr<ID3DBlob> m_postProcessingPixelShader;
-
-    static const UINT FRAME_COUNT = 2; // 假设交换链有两个后台缓冲区
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_renderTargets[FRAME_COUNT]; // 后台缓冲区数组
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap; // RTV 堆
-    UINT m_rtvDescriptorSize = 0; // RTV 描述符大小
-*/
 };
 
